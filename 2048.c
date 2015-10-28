@@ -8,7 +8,7 @@
  */ 
 #define PWD_LEN 5
 
-#include <ncurses.h>
+#include "ncurses.h"
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -150,15 +150,15 @@ void settings(){
     init_pair(20, COLOR_YELLOW, COLOR_MAGENTA);
 }
 
-char AlignCol(int curline,int direction);
-char AlignLine(int curline,int direction);
-char CheckEat(char *a,char *b);
-void Clrboard(int boardToClr);
-char* Display(char in);
-char Eat(bool isH,int direction);
-char EatCol(int curline,int direction);
-char EatLine(int curline,int direction);
-int GetRandNums();
+char  AlignCol (int curline,int direction);
+char  AlignLine(int curline,int direction);
+char  CheckEat (char *a,char *b);
+void  Clrboard (int boardToClr);
+char* Display  (char in);
+char  Eat      (bool isH,int direction);
+char  EatCol   (int curline,int direction);
+char  EatLine  (int curline,int direction);
+int   GetRandNums();
 unsigned int Rando(int N);
 
 /// \brief  Align the vertical direction
@@ -320,7 +320,7 @@ void showBoard(int offy,int offx);
 void settings();
 void welcome();
 
-int c_checksum();
+int  c_checksum();
 void c_currentStr(bool show);
 void c_forceQuit();
 void c_loadStr();
@@ -328,6 +328,7 @@ void c_readBoard(int from);
 void c_readFromDisk(int boards);
 void c_saveBoard(int to,bool jmp);
 void c_tryQuit();
+int  c_version();
 void c_warning(char* warn);
 bool c_writeBoardToDisk(char board);
 
@@ -355,7 +356,7 @@ void command(){
     }else if(strcmp(cmd,"q")==0||strcmp(cmd,"quit")==0){
         c_tryQuit();
     }else if(strcmp(cmd,"w")==0||strcmp(cmd,"write")==0){
-        c_writeBoardToDisk(arg);
+        c_writeBoardToDisk(NA);
     }else if(strcmp(cmd,"wb")==0||strcmp(cmd,"writeboard")==0){
         c_writeBoardToDisk(arg%MAX_BOARD_NUM);
     }else if(strcmp(cmd,"wq")==0||strcmp(cmd,"writequit")==0){
@@ -472,10 +473,7 @@ void welcome(){
     char mesg[]=":2048";
     getmaxyx(stdscr,row,col);
     mvprintw(row/2,(col-strlen(mesg))/2,mesg);
-	int ver=0;
-	for(int i=0;i<100;++i){
-		ver+=(cs_pwd[i%PWD_LEN]^cs_pwd[(i+1)%PWD_LEN])+cs_pwd[(i+2)%PWD_LEN];
-	}
+	int ver=c_version();
 	char verstr[100];
 	sprintf(verstr,"version %X",ver);
 	mvprintw(row/2+1,(col-strlen(verstr))/2,verstr);
@@ -618,19 +616,17 @@ void c_readBoard(int from){
 /// \return void
 void c_readFromDisk(int boards){
     char name[20];
+	int ver=c_version();
     if(boards!=NA){
-        sprintf(name,"2048.%d.save",boards);
+        sprintf(name,"2048.%d.%X.save",boards,ver);
     }else{
-        sprintf(name,"2048.save");
+        sprintf(name,"2048.%X.save",ver);
         boards=curs;
     }
     FILE *fp;
     if((fp=fopen(name,"r"))) {
         int iptN;
-		int ver=0,iptVer=0;
-		for(int i=0;i<100;++i){
-			ver+=(cs_pwd[i%PWD_LEN]^cs_pwd[(i+1)%PWD_LEN])+cs_pwd[(i+2)%PWD_LEN];
-		}
+		int iptVer=0;
 		fscanf(fp,"%X",&iptVer);
 		if(iptVer!=ver){
 			char w[1024];
@@ -666,6 +662,15 @@ void c_saveBoard(int to,bool jmp){
     mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d, current#%d",curs,to,boardseed[curs]);
     if(jmp)curs=to;
 }
+/// \brief  Calculate the game's version
+/// \return Version
+int c_version(){
+	int ver=0;
+	for(int i=0;i<100;++i){
+		ver+=(cs_pwd[i%PWD_LEN]^cs_pwd[(i+1)%PWD_LEN])+cs_pwd[(i+2)%PWD_LEN];
+	}
+	return ver;
+}
 /// \brief  Ask player whether to quit
 /// \return void
 void c_tryQuit(){
@@ -693,18 +698,15 @@ void c_tryQuit(){
 /// \return Whether the file is saved successfully
 bool c_writeBoardToDisk(char boards){
     char name[20];
+	int ver=c_version();
     if(boards!=NA){
-        sprintf(name,"2048.%d.save",boards);
+        sprintf(name,"2048.%d.%X.save",boards,ver);
     }else{
-        sprintf(name,"2048.save");
+        sprintf(name,"2048.%X.save",ver);
         boards=curs;
     }
     FILE *fp;
     if((fp=fopen(name,"w+"))) {
-		int ver=0;
-		for(int i=0;i<100;++i){
-			ver+=(cs_pwd[i%PWD_LEN]^cs_pwd[(i+1)%PWD_LEN])+cs_pwd[(i+2)%PWD_LEN];
-		}
 		fprintf(fp,"%X\n",ver);
         char tmp=curs;
         curs=boards;
