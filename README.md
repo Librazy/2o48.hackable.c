@@ -1,5 +1,7 @@
 # 2o48.hackable.c
+
 An hackable 2048 game written in C
+
 Used ncurses.h to control the input and output
 
 
