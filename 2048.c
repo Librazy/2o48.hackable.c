@@ -85,9 +85,10 @@ char N=5;
 /*! The size of the screen */
 int row,col;
 
-/** Set the global settings
- *  TODO:use a ini instead?
- */
+/// \brief   Set the global settings
+///
+///           TODO:use a ini instead?
+/// \return void
 void settings(){
     for(int i=0;i!=MAX_BOARD_NUM;++i){
         boardseed[i]=NA;
@@ -613,7 +614,7 @@ void c_readBoard(int from){
     mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Load board#%d",curs,boardseed[curs]);
 }
 /// \brief  Read the saved file
-/// \param  from The number of the saved board.NA for not to use
+/// \param  boards The number of the saved board.NA for not to use
 /// \return void
 void c_readFromDisk(int boards){
     char name[20];
