@@ -8,7 +8,7 @@
  */ 
 #define PWD_LEN 5
 
-#include "ncurses.h"
+#include "./ncurses.h"
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>

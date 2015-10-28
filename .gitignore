@@ -4,3 +4,4 @@ man/
 rtf/
 xml/
 *.exe
+*.save
