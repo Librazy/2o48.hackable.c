@@ -1,37 +1,93 @@
-#define PWD_LEN 4
+/*!
+ *  The password for the save file and represent the version of the game
+ *  Should and only be changed when the saved file isn't/shouldn't compatible with others
+ */ 
 #define PWD ":2048"
+/*!
+ *  The length of PWD
+ */ 
+#define PWD_LEN 5
 
 #include <ncurses.h>
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <time.h>
-const int NA=127;
+const int NA=127;					/**< Stand for invalid grid. */
+/*!
+ *  The maxium board num (for saving in game)
+ */ 
 #define MAX_BOARD_NUM 16
+/*!
+ *  The maxium board size
+ */ 
 #define MAX_BOARD_SIZE 16
-int P_RANDNUM=30;//The probability of an empty grid becoming filled 
-int MAX_RANDNUM=2;//The maxium level of filling an grid.
+int P_RANDNUM=30;					/**< The probability of an empty grid becoming filled */
+int MAX_RANDNUM=2;					/**< The maxium level of filling an grid. */
+
+//Shortcuts for params when calling Eat()
+/*!
+  \def EUP
+  Eat up
+  \def EDOWN
+  Eat down
+  \def ELEFT
+  Eat left
+  \def ERIGHT
+  Rat right
+*/
 #define EUP false,1
 #define EDOWN false,-1
 #define ELEFT true,1
 #define ERIGHT true,-1
+
+/*!
+  \def MENU_POSITION_Y
+  the Y position to print menu
+  \def MENU_POSITION_X
+  the X position to print menu
+  \def WARNING_POSITION_Y
+  the Y position to print warning
+  \def WARNING_POSITION_X
+  the X position to print warning
+*/
 #define MENU_POSITION_Y row-1
 #define MENU_POSITION_X 0
 #define WARNING_POSITION_Y row-2
 #define WARNING_POSITION_X 0
-
-const char cs_pwd[PWD_LEN+1]=PWD;
+/*! The password when generating the checksum */
+const char cs_pwd[PWD_LEN+1]=PWD;	
+/*! The boards to storage game progress */
 char board[MAX_BOARD_NUM][MAX_BOARD_SIZE][MAX_BOARD_SIZE];
-//   ^ < curs|line|coln
+/*! The output string */
 char boardstr[MAX_BOARD_SIZE][MAX_BOARD_SIZE][5];
+/*! The random seed of the boards */
 int boardseed[MAX_BOARD_NUM];
+/*! Current board */
 unsigned char curs=0;
-char eat[256][256];
+//! Eat table(TODO:use eat array in CheckEat) 
+/*! Will set a=eat[a][b][0]
+*	and b=eat[a][b][1]
+*	when eating a and b
+*/
+char eat[256][256][2];
+/*! Display table */
+/*! Will display a as string display[a]
+*/
 char display[256][16];
+//! Point table(TODO:use eat array in CheckEat) 
+/*! Will count a by point[a] when adding up the points
+*/
 int point[256];
+/*! The size of the board */
 char N=5;
+
+/*! The size of the screen */
 int row,col;
 
+/** Set the global settings
+ *  TODO:use a ini instead?
+ */
 void settings(){
     for(int i=0;i!=MAX_BOARD_NUM;++i){
         boardseed[i]=NA;
@@ -104,6 +160,11 @@ char EatLine(int curline,int direction);
 int GetRandNums();
 unsigned int Rando(int N);
 
+/// \brief  Align the vertical direction
+/// \param  curcol Current column to align
+/// \param  direction The direction to align to
+///			 positive for up and negative for down
+/// \return The number of blank grid in the column
 char AlignCol(int curcol,int direction){
     int begin=(direction<=0)?N-1:0;
     int end=(direction<=0)?-1:N;
@@ -128,6 +189,11 @@ char AlignCol(int curcol,int direction){
     }
     return blank;
 }
+/// \brief  Align the horizontal direction
+/// \param  curline Current line to align
+/// \param  direction The direction to align to
+///			 positive for left and negative for right
+/// \return The number of blank grid in the column
 char AlignLine(int curline,int direction){
     int begin=(direction<=0)?N-1:0;
     int end=(direction<=0)?-1:N;
@@ -152,20 +218,36 @@ char AlignLine(int curline,int direction){
     }
     return blank;
 }
+/// \brief  Check while the two number can be eated
+/// \param  a Value a
+/// \param  b Value b
+/// \return The final value of a
 char CheckEat(char* a,char* b){
-    if(*a==0||*b==0||*a==NA||*b==NA)return NA;
-    if(*a>=0&&*b>=0&&*a<=19&&*b<=19){//for 2~2048
+    if(*a==0||*b==0||*a==NA||*b==NA)return NA;//If empty
+    if(*a>=0&&*b>=0&&*a<=19&&*b<=19){
         if(*a==*b){*a=*a+1;*b=NA;return *a;}
     }
     return NA;
 }
+/// \brief  Empty the board specified
+/// \param  boardToClr The board to empty
+/// \return void
 void Clrboard(int boardToClr){
     memset(board[boardToClr],0,sizeof(char)*MAX_BOARD_SIZE*MAX_BOARD_SIZE);
 }
+/// \brief  Get the grid's display string
+/// \param  in The grid's value
+/// \return The string to display
 char* Display(char in){
     display[(unsigned char)in][15]='\0';
     return display[(unsigned char)in];
 }
+/// \brief  Eat the board at the direction specified
+/// \param  isH Is horizontal
+///			 true for horizontal and false for vertical
+/// \param  direction The direction to eat to
+///			 positive for left/up and negative for right/down
+/// \return The number of empty grids
 char Eat(bool isH,int direction){
     char blank=0;
     if(isH){
@@ -181,6 +263,11 @@ char Eat(bool isH,int direction){
     }
     return blank;
 }
+/// \brief  Eat the vertical direction
+/// \param  curcol Current column to eat
+/// \param  direction The direction to eat
+///			 positive for up and negative for down
+/// \return The number of blank grid in the column
 char EatCol(int curcol,int direction){
     int begin=(direction<=0)?N-1:0;
     int end=(direction<=0)?-1-direction:N-direction;
@@ -190,6 +277,11 @@ char EatCol(int curcol,int direction){
     }
     return AlignCol(curcol,direction);
 }
+/// \brief  Eat the horizontal direction
+/// \param  curline Current line to eat
+/// \param  direction The direction to eat
+///			 positive for left and negative for right
+/// \return The number of blank grid in the column
 char EatLine(const int curline,int direction){
     int begin=(direction<=0)?N-1:0;
     int end=(direction<=0)?-1-direction:N-direction;
@@ -199,6 +291,8 @@ char EatLine(const int curline,int direction){
     }
     return AlignLine(curline,direction);
 }
+/// \brief  Get random grid ranged fron 0 to MAX_RANDNUM on board
+/// \return The number of random grid generated
 int GetRandNums(){
     int count=0;
     for(int i=0;i!=N;++i){
@@ -208,6 +302,9 @@ int GetRandNums(){
     }
     return count;
 }
+/// \brief  Generate random num ranged fron 0 to N-1
+/// \param  N The upper bound of the random number
+/// \return The random number
 unsigned int Rando(int N){
     unsigned int t=RAND_MAX/N;if(t<1)t=1;
     unsigned int ra;
@@ -233,6 +330,8 @@ void c_tryQuit();
 void c_warning(char* warn);
 bool c_writeBoardToDisk(char board);
 
+/// \brief  Show and handle commands inputed by :
+/// \return void
 void command(){
     char cmd[MAX_BOARD_SIZE*MAX_BOARD_SIZE*4];
     echo();
@@ -275,6 +374,8 @@ void command(){
         c_warning(str);
     }
 }
+/// \brief  Handle when no empty grid present
+/// \return void
 void die(){
     c_warning("You are dead!\nPress q to quit or r to restart");
     int ch,cho=1;
@@ -295,6 +396,8 @@ void die(){
     welcome();
     play();
 }
+/// \brief  Handle for main game
+/// \return void
 void play(){
     clear();
     if(boardseed[curs]==NA){
@@ -332,6 +435,10 @@ void play(){
         if(res==lastres&&res==0){die();}
     }
 }
+/// \brief  Print the board to screen
+/// \param  offy The y position for the left-up corner
+/// \param  offx The x position for the left-up corner
+/// \return void
 void showBoard(int offy,int offx){
     move(MENU_POSITION_Y,MENU_POSITION_X);
     clrtoeol();
@@ -357,6 +464,8 @@ void showBoard(int offy,int offx){
     mvprintw(offy+N*2,offx+N*10,"-");
     refresh();
 }
+/// \brief  Print welcome message and input the size of the board
+/// \return void
 void welcome(){
     clear();
     char mesg[]=":2048";
@@ -377,7 +486,8 @@ void welcome(){
     printw("%d\nThe board will be %d.Press any key and rock on!",N,N);
     getch();
 }
-
+/// \brief  Calculate the checksum for saving
+/// \return The checksum for current board
 int c_checksum(){
     int checksum=0;
     int rowsum=85,colsum=85,r=0,c=0;
@@ -400,6 +510,9 @@ int c_checksum(){
     checksum=(rowsum<<4)+colsum;
     return checksum;
 }
+/// \brief  Genetate the string representing current board
+/// \param  show If need to print the string to screen
+/// \return void
 void c_currentStr(bool show){
     for(int i=0;i!=N;++i){
         for(int j=0;j!=N;++j){
@@ -427,11 +540,17 @@ void c_currentStr(bool show){
         }
     }
 }
+/// \brief  Quit the game
+/// \return void
 void c_forceQuit(){
     clear();
     endwin();
     exit(0);
 }
+/// \brief  Load the string representing saved board
+/// \param  iptN The N in the saved game
+/// \param  fp The file stream to read from
+/// \return void
 void c_loadStr(int iptN,FILE* fp){
     N=iptN;
     Clrboard(curs);
@@ -476,6 +595,9 @@ void c_loadStr(int iptN,FILE* fp){
     }
 	refresh();
 }
+/// \brief  Read the saved board
+/// \param  from The number of board to read from
+/// \return void
 void c_readBoard(int from){
     boardseed[curs]=Rando(RAND_MAX);
     if(boardseed[from]==NA){
@@ -490,6 +612,9 @@ void c_readBoard(int from){
     showBoard(5,5);
     mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Load board#%d",curs,boardseed[curs]);
 }
+/// \brief  Read the saved file
+/// \param  from The number of the saved board.NA for not to use
+/// \return void
 void c_readFromDisk(int boards){
     char name[20];
     if(boards!=NA){
@@ -524,6 +649,10 @@ void c_readFromDisk(int boards){
     }
     fclose(fp);
 }
+/// \brief  Save the board in memory
+/// \param  to The number of the board to save to.NA for auto find nnext
+/// \param  jmp If should jump to new board
+/// \return void
 void c_saveBoard(int to,bool jmp){
     if(to==NA){
         to=abs((curs+1)%MAX_BOARD_NUM);
@@ -536,6 +665,8 @@ void c_saveBoard(int to,bool jmp){
     mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d, current#%d",curs,to,boardseed[curs]);
     if(jmp)curs=to;
 }
+/// \brief  Ask player whether to quit
+/// \return void
 void c_tryQuit(){
     move(MENU_POSITION_Y,MENU_POSITION_X);
     clrtoeol();
@@ -556,6 +687,9 @@ void c_tryQuit(){
     move(1+WARNING_POSITION_Y,WARNING_POSITION_X);
     clrtoeol();
 }
+/// \brief  Write the board to disk
+/// \param  boards The number of board to save
+/// \return Whether the file is saved successfully
 bool c_writeBoardToDisk(char boards){
     char name[20];
     if(boards!=NA){
@@ -605,12 +739,17 @@ bool c_writeBoardToDisk(char boards){
     
     
 }
+/// \brief  Print a warning to screen
+/// \param  warn The string to print
+/// \return void
 void c_warning(char* warn){
     attron(COLOR_PAIR(10)|A_BOLD);
     mvprintw(WARNING_POSITION_Y,WARNING_POSITION_X,warn);
     attroff(COLOR_PAIR(10)|A_BOLD);
     refresh();
 }
+/// \brief  Main executable
+/// \return 0
 int main()
 {
     srand((int)time(0));
