@@ -7,8 +7,11 @@
  *  The length of PWD
  */ 
 #define PWD_LEN 5
-
+#ifndef LOCAL_NCURSES
+#include <ncurses.h>
+#else 
 #include "./ncurses.h"
+#endif
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -164,6 +167,7 @@ unsigned int Rando(int N);
 /// \brief  Align the vertical direction
 /// \param  curcol Current column to align
 /// \param  direction The direction to align to
+///
 ///			 positive for up and negative for down
 /// \return The number of blank grid in the column
 char AlignCol(int curcol,int direction){
@@ -193,6 +197,7 @@ char AlignCol(int curcol,int direction){
 /// \brief  Align the horizontal direction
 /// \param  curline Current line to align
 /// \param  direction The direction to align to
+///
 ///			 positive for left and negative for right
 /// \return The number of blank grid in the column
 char AlignLine(int curline,int direction){
@@ -245,8 +250,10 @@ char* Display(char in){
 }
 /// \brief  Eat the board at the direction specified
 /// \param  isH Is horizontal
+///
 ///			 true for horizontal and false for vertical
 /// \param  direction The direction to eat to
+///
 ///			 positive for left/up and negative for right/down
 /// \return The number of empty grids
 char Eat(bool isH,int direction){
@@ -267,6 +274,7 @@ char Eat(bool isH,int direction){
 /// \brief  Eat the vertical direction
 /// \param  curcol Current column to eat
 /// \param  direction The direction to eat
+///
 ///			 positive for up and negative for down
 /// \return The number of blank grid in the column
 char EatCol(int curcol,int direction){
@@ -281,6 +289,7 @@ char EatCol(int curcol,int direction){
 /// \brief  Eat the horizontal direction
 /// \param  curline Current line to eat
 /// \param  direction The direction to eat
+///
 ///			 positive for left and negative for right
 /// \return The number of blank grid in the column
 char EatLine(const int curline,int direction){
@@ -358,15 +367,13 @@ void command(){
     }else if(strcmp(cmd,"w")==0||strcmp(cmd,"write")==0){
         c_writeBoardToDisk(NA);
     }else if(strcmp(cmd,"wb")==0||strcmp(cmd,"writeboard")==0){
-        c_writeBoardToDisk(arg%MAX_BOARD_NUM);
+        c_writeBoardToDisk(arg);
     }else if(strcmp(cmd,"wq")==0||strcmp(cmd,"writequit")==0){
         if(c_writeBoardToDisk(NA))c_forceQuit();
     }else if(strcmp(cmd,"q!")==0||strcmp(cmd,"quit!")==0){
         c_forceQuit();
     }else if(strcmp(cmd,"o")==0||strcmp(cmd,"open")==0){
         c_readFromDisk(arg);
-    }else if(strcmp(cmd,"l")==0||strcmp(cmd,"load")==0){
-        //c_loadStr(arg);
     }else if(strcmp(cmd,"c")==0||strcmp(cmd,"current")==0){
         c_currentStr(true);
     }else{
@@ -598,6 +605,9 @@ void c_loadStr(int iptN,FILE* fp){
 /// \param  from The number of board to read from
 /// \return void
 void c_readBoard(int from){
+	if(from==NA){
+        from=abs((curs-1)%MAX_BOARD_NUM);
+    }
     boardseed[curs]=Rando(RAND_MAX);
     if(boardseed[from]==NA){
         mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Librazy found board#%d empty",curs);
@@ -660,7 +670,12 @@ void c_saveBoard(int to,bool jmp){
     move(MENU_POSITION_Y,MENU_POSITION_X);
     clrtoeol();
     mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d, current#%d",curs,to,boardseed[curs]);
-    if(jmp)curs=to;
+    if(jmp){
+		curs=to;
+		mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d, current#%d",curs,to,boardseed[curs]);
+	}else{
+		mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d to #%d",curs,to,boardseed[curs]);
+	}
 }
 /// \brief  Calculate the game's version
 /// \return Version
@@ -697,6 +712,10 @@ void c_tryQuit(){
 /// \param  boards The number of board to save
 /// \return Whether the file is saved successfully
 bool c_writeBoardToDisk(char boards){
+	if(boards==NA){
+        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Librazy don't know which board should be saved");
+        return false;
+    }
     char name[20];
 	int ver=c_version();
     if(boards!=NA){
