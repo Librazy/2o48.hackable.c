@@ -1,4 +1,4 @@
-/*!
+jwan yande /*!
  *  The password for the save file and represent the version of the game
  *  Should and only be changed when the saved file isn't/shouldn't compatible with others
  */ 
@@ -16,7 +16,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <time.h>
-const int NA=127;					/**< Stand for invalid grid. */
+const int NA=127;                   /**< Stand for invalid grid. */
 /*!
  *  The maxium board num (for saving in game)
  */ 
@@ -25,8 +25,8 @@ const int NA=127;					/**< Stand for invalid grid. */
  *  The maxium board size
  */ 
 #define MAX_BOARD_SIZE 16
-int P_RANDNUM=30;					/**< The probability of an empty grid becoming filled */
-int MAX_RANDNUM=2;					/**< The maxium level of filling an grid. */
+int P_RANDNUM=30;                   /**< The probability of an empty grid becoming filled */
+int MAX_RANDNUM=2;                  /**< The maxium level of filling an grid. */
 
 //Shortcuts for params when calling Eat()
 /*!
@@ -59,7 +59,7 @@ int MAX_RANDNUM=2;					/**< The maxium level of filling an grid. */
 #define WARNING_POSITION_Y row-2
 #define WARNING_POSITION_X 0
 /*! The password when generating the checksum */
-const char cs_pwd[PWD_LEN+1]=PWD;	
+const char cs_pwd[PWD_LEN+1]=PWD;   
 /*! The boards to storage game progress */
 char board[MAX_BOARD_NUM][MAX_BOARD_SIZE][MAX_BOARD_SIZE];
 /*! The output string */
@@ -70,8 +70,8 @@ int boardseed[MAX_BOARD_NUM];
 unsigned char curs=0;
 //! Eat table(TODO:use eat array in CheckEat) 
 /*! Will set a=eat[a][b][0]
-*	and b=eat[a][b][1]
-*	when eating a and b
+*   and b=eat[a][b][1]
+*   when eating a and b
 */
 char eat[256][256][2];
 /*! Display table */
@@ -168,7 +168,7 @@ unsigned int Rando(int N);
 /// \param  curcol Current column to align
 /// \param  direction The direction to align to
 ///
-///			 positive for up and negative for down
+///          positive for up and negative for down
 /// \return The number of blank grid in the column
 char AlignCol(int curcol,int direction){
     int begin=(direction<=0)?N-1:0;
@@ -198,7 +198,7 @@ char AlignCol(int curcol,int direction){
 /// \param  curline Current line to align
 /// \param  direction The direction to align to
 ///
-///			 positive for left and negative for right
+///          positive for left and negative for right
 /// \return The number of blank grid in the column
 char AlignLine(int curline,int direction){
     int begin=(direction<=0)?N-1:0;
@@ -251,10 +251,10 @@ char* Display(char in){
 /// \brief  Eat the board at the direction specified
 /// \param  isH Is horizontal
 ///
-///			 true for horizontal and false for vertical
+///          true for horizontal and false for vertical
 /// \param  direction The direction to eat to
 ///
-///			 positive for left/up and negative for right/down
+///          positive for left/up and negative for right/down
 /// \return The number of empty grids
 char Eat(bool isH,int direction){
     char blank=0;
@@ -275,7 +275,7 @@ char Eat(bool isH,int direction){
 /// \param  curcol Current column to eat
 /// \param  direction The direction to eat
 ///
-///			 positive for up and negative for down
+///          positive for up and negative for down
 /// \return The number of blank grid in the column
 char EatCol(int curcol,int direction){
     int begin=(direction<=0)?N-1:0;
@@ -290,7 +290,7 @@ char EatCol(int curcol,int direction){
 /// \param  curline Current line to eat
 /// \param  direction The direction to eat
 ///
-///			 positive for left and negative for right
+///          positive for left and negative for right
 /// \return The number of blank grid in the column
 char EatLine(const int curline,int direction){
     int begin=(direction<=0)?N-1:0;
@@ -401,7 +401,7 @@ void die(){
                 cho=0;
         }
     }
-	if(cho==2)return;
+    if(cho==2)return;
     welcome();
     play();
 }
@@ -480,10 +480,10 @@ void welcome(){
     char mesg[]=":2048";
     getmaxyx(stdscr,row,col);
     mvprintw(row/2,(col-strlen(mesg))/2,mesg);
-	int ver=c_version();
-	char verstr[100];
-	sprintf(verstr,"version %X",ver);
-	mvprintw(row/2+1,(col-strlen(verstr))/2,verstr);
+    int ver=c_version();
+    char verstr[100];
+    sprintf(verstr,"version %X",ver);
+    mvprintw(row/2+1,(col-strlen(verstr))/2,verstr);
     mvprintw(row-3,0,"Welcome to :2048 by Librazy\n");
     printw("Enter a number<=9 that you want the board be:");
     int inpN=4+'0';
@@ -501,7 +501,7 @@ int c_checksum(){
         r=0;
         for(int j=0;j!=N;++j){
             r+=((int)board[curs][i][j])^170;
-			r^=cs_pwd[(j*N+i)%PWD_LEN];
+            r^=cs_pwd[(j*N+i)%PWD_LEN];
         }
         rowsum^=r;
     }
@@ -509,7 +509,7 @@ int c_checksum(){
         c=0;
         for(int i=0;i!=N;++i){
             c+=((int)board[curs][i][j])^170;
-			c^=cs_pwd[(i*N+j)%PWD_LEN];
+            c^=cs_pwd[(i*N+j)%PWD_LEN];
         }
         colsum^=c;
     }
@@ -589,23 +589,23 @@ void c_loadStr(int iptN,FILE* fp){
         }
         printw("\n");
     }
-	showBoard(5,5);
+    showBoard(5,5);
     if(c_checksum()==checksum){
         move(MENU_POSITION_Y,MENU_POSITION_X);
         clrtoeol();
         mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Game progress loaded successful!");
     }else{
         Clrboard(curs);
-		showBoard(5,5);
+        showBoard(5,5);
         c_warning("Librazy found you are cheating!");
     }
-	refresh();
+    refresh();
 }
 /// \brief  Read the saved board
 /// \param  from The number of board to read from
 /// \return void
 void c_readBoard(int from){
-	if(from==NA){
+    if(from==NA){
         from=abs((curs-1)%MAX_BOARD_NUM);
     }
     boardseed[curs]=Rando(RAND_MAX);
@@ -626,7 +626,7 @@ void c_readBoard(int from){
 /// \return void
 void c_readFromDisk(int boards){
     char name[20];
-	int ver=c_version();
+    int ver=c_version();
     if(boards!=NA){
         sprintf(name,"2048.%d.%X.save",boards,ver);
     }else{
@@ -636,14 +636,14 @@ void c_readFromDisk(int boards){
     FILE *fp;
     if((fp=fopen(name,"r"))) {
         int iptN;
-		int iptVer=0;
-		fscanf(fp,"%X",&iptVer);
-		if(iptVer!=ver){
-			char w[1024];
-			sprintf(w,"Librazy found that the game's version dosen't match!\nYour version:%X, saved:%X",ver,iptVer);
-			c_warning(w);
-			return ;
-		}
+        int iptVer=0;
+        fscanf(fp,"%X",&iptVer);
+        if(iptVer!=ver){
+            char w[1024];
+            sprintf(w,"Librazy found that the game's version dosen't match!\nYour version:%X, saved:%X",ver,iptVer);
+            c_warning(w);
+            return ;
+        }
         move(WARNING_POSITION_Y,WARNING_POSITION_X);
         clrtoeol();
         mvprintw(WARNING_POSITION_Y,WARNING_POSITION_X,"Opening %s",name);
@@ -671,20 +671,20 @@ void c_saveBoard(int to,bool jmp){
     clrtoeol();
     mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d, current#%d",curs,to,boardseed[curs]);
     if(jmp){
-		curs=to;
-		mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d, current#%d",curs,to,boardseed[curs]);
-	}else{
-		mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d to #%d",curs,to,boardseed[curs]);
-	}
+        curs=to;
+        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d, current#%d",curs,to,boardseed[curs]);
+    }else{
+        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d to #%d",curs,to,boardseed[curs]);
+    }
 }
 /// \brief  Calculate the game's version
 /// \return Version
 int c_version(){
-	int ver=0;
-	for(int i=0;i<100;++i){
-		ver+=(cs_pwd[i%PWD_LEN]^cs_pwd[(i+1)%PWD_LEN])+cs_pwd[(i+2)%PWD_LEN];
-	}
-	return ver;
+    int ver=0;
+    for(int i=0;i<100;++i){
+        ver+=(cs_pwd[i%PWD_LEN]^cs_pwd[(i+1)%PWD_LEN])+cs_pwd[(i+2)%PWD_LEN];
+    }
+    return ver;
 }
 /// \brief  Ask player whether to quit
 /// \return void
@@ -712,12 +712,12 @@ void c_tryQuit(){
 /// \param  boards The number of board to save
 /// \return Whether the file is saved successfully
 bool c_writeBoardToDisk(char boards){
-	if(boards==NA){
+    if(boards==NA){
         mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Librazy don't know which board should be saved");
         return false;
     }
     char name[20];
-	int ver=c_version();
+    int ver=c_version();
     if(boards!=NA){
         sprintf(name,"2048.%d.%X.save",boards,ver);
     }else{
@@ -726,7 +726,7 @@ bool c_writeBoardToDisk(char boards){
     }
     FILE *fp;
     if((fp=fopen(name,"w+"))) {
-		fprintf(fp,"%X\n",ver);
+        fprintf(fp,"%X\n",ver);
         char tmp=curs;
         curs=boards;
         c_currentStr(false);
