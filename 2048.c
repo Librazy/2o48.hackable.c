@@ -1,4 +1,4 @@
-jwan yande /*!
+/*!
  *  The password for the save file and represent the version of the game
  *  Should and only be changed when the saved file isn't/shouldn't compatible with others
  */ 
