@@ -16,7 +16,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <time.h>
-const int NA=127;                   /**< Stand for invalid grid. */
+const int NA=126;                   /**< Stand for invalid grid. */
 /*!
  *  The maxium board num (for saving in game)
  */ 
@@ -367,7 +367,11 @@ void command(){
     }else if(strcmp(cmd,"w")==0||strcmp(cmd,"write")==0){
         c_writeBoardToDisk(NA);
     }else if(strcmp(cmd,"wb")==0||strcmp(cmd,"writeboard")==0){
-        c_writeBoardToDisk(arg);
+		if(NA==arg){
+			mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Librazy don't know which board should be saved");
+		}else{
+			c_writeBoardToDisk(arg);
+		}
     }else if(strcmp(cmd,"wq")==0||strcmp(cmd,"writequit")==0){
         if(c_writeBoardToDisk(NA))c_forceQuit();
     }else if(strcmp(cmd,"q!")==0||strcmp(cmd,"quit!")==0){
@@ -503,6 +507,7 @@ int c_checksum(){
             r+=((int)board[curs][i][j])^170;
             r^=cs_pwd[(j*N+i)%PWD_LEN];
         }
+        rowsum|=(r<<5)+r;
         rowsum^=r;
     }
     for(int j=0;j!=N;++j){
@@ -511,9 +516,10 @@ int c_checksum(){
             c+=((int)board[curs][i][j])^170;
             c^=cs_pwd[(i*N+j)%PWD_LEN];
         }
+        colsum+=(c<<4)+c;
         colsum^=c;
     }
-    checksum=(rowsum<<4)+colsum;
+    checksum=((rowsum+colsum)+((colsum^rowsum)<<4))^(((rowsum+colsum)<<4)+(colsum^rowsum));
     return checksum;
 }
 /// \brief  Genetate the string representing current board
@@ -606,18 +612,18 @@ void c_loadStr(int iptN,FILE* fp){
 /// \return void
 void c_readBoard(int from){
     if(from==NA){
-        from=abs((curs-1)%MAX_BOARD_NUM);
+        from=abs((16+curs-1)%MAX_BOARD_NUM);
     }
+	from%=MAX_BOARD_NUM;
     boardseed[curs]=Rando(RAND_MAX);
     if(boardseed[from]==NA){
-        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Librazy found board#%d empty",curs);
+        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Librazy found board#%d empty",from);
         return;
     }
+	curs=from;
     srand(boardseed[from]);
     move(MENU_POSITION_Y,MENU_POSITION_X);
     clrtoeol();
-    from%=MAX_BOARD_NUM;
-    curs=abs(from);
     showBoard(5,5);
     mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Load board#%d",curs,boardseed[curs]);
 }
@@ -628,11 +634,13 @@ void c_readFromDisk(int boards){
     char name[20];
     int ver=c_version();
     if(boards!=NA){
+		boards=abs(boards%MAX_BOARD_NUM);
         sprintf(name,"2048.%d.%X.save",boards,ver);
     }else{
         sprintf(name,"2048.%X.save",ver);
         boards=curs;
     }
+	boards=abs(boards%MAX_BOARD_NUM);
     FILE *fp;
     if((fp=fopen(name,"r"))) {
         int iptN;
@@ -648,7 +656,7 @@ void c_readFromDisk(int boards){
         clrtoeol();
         mvprintw(WARNING_POSITION_Y,WARNING_POSITION_X,"Opening %s",name);
         fscanf(fp,"%d",&iptN);
-        c_loadStr(iptN%16,fp);
+        c_loadStr(iptN%MAX_BOARD_SIZE,fp);
     }else{
         move(MENU_POSITION_Y,MENU_POSITION_X);
         clrtoeol();
@@ -662,19 +670,20 @@ void c_readFromDisk(int boards){
 /// \return void
 void c_saveBoard(int to,bool jmp){
     if(to==NA){
+		c_warning("!!");
         to=abs((curs+1)%MAX_BOARD_NUM);
     }
+	to=abs(to%MAX_BOARD_NUM);
     boardseed[to]=boardseed[curs]=Rando(RAND_MAX);
     srand(boardseed[curs]);
     memcpy(board[to],board[curs],sizeof(char)*MAX_BOARD_SIZE*MAX_BOARD_SIZE);
     move(MENU_POSITION_Y,MENU_POSITION_X);
     clrtoeol();
-    mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d, current#%d",curs,to,boardseed[curs]);
     if(jmp){
-        curs=to;
-        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d, current#%d",curs,to,boardseed[curs]);
+        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d, current#%d",curs,to);
+		curs=to;
     }else{
-        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d to #%d",curs,to,boardseed[curs]);
+        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d to #%d",curs,to);
     }
 }
 /// \brief  Calculate the game's version
@@ -712,18 +721,16 @@ void c_tryQuit(){
 /// \param  boards The number of board to save
 /// \return Whether the file is saved successfully
 bool c_writeBoardToDisk(char boards){
-    if(boards==NA){
-        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Librazy don't know which board should be saved");
-        return false;
-    }
     char name[20];
     int ver=c_version();
     if(boards!=NA){
+		boards=abs(boards%MAX_BOARD_NUM);
         sprintf(name,"2048.%d.%X.save",boards,ver);
     }else{
         sprintf(name,"2048.%X.save",ver);
         boards=curs;
     }
+	boards=abs(boards%MAX_BOARD_NUM);
     FILE *fp;
     if((fp=fopen(name,"w+"))) {
         fprintf(fp,"%X\n",ver);
