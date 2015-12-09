@@ -8,10 +8,16 @@
  */ 
 #define PWD_LEN 5
 #ifndef LOCAL_NCURSES
-#include <ncurses.h>
+	#include <ncurses.h>
+	#include <pthread.h>
 #else 
-#include "./ncurses.h"
+	#include "./include/ncurses.h"
+	#include "./include/pthread.h"
 #endif
+typedef pthread_mutex_t Mut;
+typedef pthread_cond_t Cond;
+typedef pthread_attr_t Attr;
+typedef pthread_t Thrd;
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -54,12 +60,13 @@ int MAX_RANDNUM=2;                  /**< The maxium level of filling an grid. */
   \def WARNING_POSITION_X
   the X position to print warning
 */
-#define MENU_POSITION_Y row-1
+#define MENU_POSITION_Y 0
 #define MENU_POSITION_X 0
-#define WARNING_POSITION_Y row-2
+#define WARNING_POSITION_Y 0
 #define WARNING_POSITION_X 0
 /*! The password when generating the checksum */
-const char cs_pwd[PWD_LEN+1]=PWD;   
+const char cs_pwd[PWD_LEN+1]=PWD; 
+/*! The mutex lock of the board */
 /*! The boards to storage game progress */
 char board[MAX_BOARD_NUM][MAX_BOARD_SIZE][MAX_BOARD_SIZE];
 /*! The output string */
@@ -87,6 +94,29 @@ char N=5;
 
 /*! The size of the screen */
 int row,col;
+/*! The buffer of the message to print */
+char sinfo[512];
+/*! If the message is a warning */
+bool iswarn;
+
+/*! The handle of t_Show thread */
+Thrd TShow;
+/*! The handle of t_Info thread */
+Thrd TInfo;
+/*! The mutex of Board */
+Mut MBoard;
+/*! The mutex of Info */
+Mut MInfo;
+/*! The condition of board */
+Cond CBoard;
+/*! The condition of info */
+Cond CInfo;
+/*! The attr of threads */
+Attr AThread;
+/*! The window to display board */
+WINDOW *BoardWin;
+/*! The window to display info */
+WINDOW *MenuWin;
 
 /// \brief   Set the global settings
 ///
@@ -129,7 +159,13 @@ void settings(){
     strcpy(display[17],"whuang5");
     strcpy(display[18],"whuang6");
     strcpy(display[19],"whuang7");
-    strcpy(display[20],"whuang8");
+    strcpy(display[20],"boom");
+	for(int i=1;i<20;++i){
+		eat[i][20][1]=i-1;
+		eat[20][i][1]=i-1;
+		eat[i][20][0]=i-2;
+		eat[20][i][0]=i-2;
+	}
     init_pair(0, COLOR_WHITE, COLOR_BLACK);
     init_pair(1, COLOR_RED, COLOR_BLACK);
     init_pair(2, COLOR_MAGENTA, COLOR_BLACK);
@@ -163,6 +199,9 @@ char  EatCol   (int curline,int direction);
 char  EatLine  (int curline,int direction);
 int   GetRandNums();
 unsigned int Rando(int N);
+
+void* t_Show(void* arg);
+void* t_Info(void* arg);
 
 /// \brief  Align the vertical direction
 /// \param  curcol Current column to align
@@ -230,10 +269,21 @@ char AlignLine(int curline,int direction){
 /// \return The final value of a
 char CheckEat(char* a,char* b){
     if(*a==0||*b==0||*a==NA||*b==NA)return NA;//If empty
-    if(*a>=0&&*b>=0&&*a<=19&&*b<=19){
-        if(*a==*b){*a=*a+1;*b=NA;return *a;}
+	if(*a==20){
+		*a=*b-1;
+		*b=*b-2;
+		return *a;
+	}
+    if(*a==*b){
+		if(*a>=1&&*b>=1&&*a<=18&&*b<=18){
+			*a=*a+1;*b=NA;return *a;
+		}else{
+			*a=eat[(int)*a][(int)*b][0];
+			*b=eat[(int)*a][(int)*b][1];
+			return eat[(int)*a][(int)*b][0];
+		}
     }
-    return NA;
+	return NA;
 }
 /// \brief  Empty the board specified
 /// \param  boardToClr The board to empty
@@ -323,12 +373,13 @@ unsigned int Rando(int N){
 }
 
 void command();
-void die();
-void play();
-void showBoard(int offy,int offx);
+bool die();
+bool play();
+void showBoard(WINDOW* win,int offy,int offx);
 void settings();
 void welcome();
 
+void c_boom(int y,int x);
 int  c_checksum();
 void c_currentStr(bool show);
 void c_forceQuit();
@@ -338,7 +389,8 @@ void c_readFromDisk(int boards);
 void c_saveBoard(int to,bool jmp);
 void c_tryQuit();
 int  c_version();
-void c_warning(char* warn);
+void c_warning(char* msg);
+void c_info(char* msg);
 bool c_writeBoardToDisk(char board);
 
 /// \brief  Show and handle commands inputed by :
@@ -346,16 +398,16 @@ bool c_writeBoardToDisk(char board);
 void command(){
     char cmd[MAX_BOARD_SIZE*MAX_BOARD_SIZE*4];
     echo();
-    curs_set(1);
-    move(MENU_POSITION_Y,MENU_POSITION_X);
+    //curs_set(1);
+    move(0,0);
     clrtoeol();
     attron(A_STANDOUT);
-    mvprintw(MENU_POSITION_Y,MENU_POSITION_X,":");
+    mvprintw(0,MENU_POSITION_X,":");
     attroff(A_STANDOUT);
-    int arg=NA;
-    scanw("%s %d",cmd,&arg);cmd[15]='\0';
+    int arg=NA,arg2=NA;
+    scanw("%s %d %d",cmd,&arg,&arg2);cmd[15]='\0';
     noecho();
-    curs_set(0);
+    //curs_set(0);
     if(strcmp(cmd,"r")==0||strcmp(cmd,"read")==0){
         c_readBoard(arg);
     }else if(strcmp(cmd,"s")==0||strcmp(cmd,"save")==0){
@@ -368,7 +420,7 @@ void command(){
         c_writeBoardToDisk(NA);
     }else if(strcmp(cmd,"wb")==0||strcmp(cmd,"writeboard")==0){
 		if(NA==arg){
-			mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Librazy don't know which board should be saved");
+			c_warning("Librazy don't know which board should be saved");
 		}else{
 			c_writeBoardToDisk(arg);
 		}
@@ -378,104 +430,139 @@ void command(){
         c_forceQuit();
     }else if(strcmp(cmd,"o")==0||strcmp(cmd,"open")==0){
         c_readFromDisk(arg);
-    }else if(strcmp(cmd,"c")==0||strcmp(cmd,"current")==0){
-        c_currentStr(true);
+    }else if(strcmp(cmd,"boom")==0){
+        c_boom(arg,arg2);
     }else{
-        char str[100];
+        char str[1000];
         sprintf(str,"Librazy don't know how to %s,\nresume game now",cmd);
         str[99]='\0';
         c_warning(str);
     }
 }
 /// \brief  Handle when no empty grid present
-/// \return void
-void die(){
+/// \return If restart
+bool die(){
     c_warning("You are dead!\nPress q to quit or r to restart");
-    int ch,cho=1;
-    while(cho&&cho-2&&(ch=getch())){
+    int ch;
+    while((ch=getch())){
         switch(ch){
-            case ':':
-                cho=2;
-                command();
-                break;
+			case 'r':case 'R':
+				return 1;
+				break;
             case 'q':case 'Q':
                 c_forceQuit();
                 break;
-            case 'r':case 'R':
-                cho=0;
         }
     }
-    if(cho==2)return;
-    welcome();
-    play();
+	return 0;
 }
 /// \brief  Handle for main game
-/// \return void
-void play(){
-    clear();
+/// \return If restart
+bool play(){
     if(boardseed[curs]==NA){
         boardseed[curs]=Rando(RAND_MAX);
     }
     srand(boardseed[curs]);
     Clrboard(curs);
-    showBoard(5,5);
+	clear();
+	pthread_create (&TInfo, &AThread, t_Info, NULL);
+    pthread_create (&TShow, &AThread, t_Show, NULL);
     keypad(stdscr, TRUE);
     int ch=0;
-    int res=NA,lastres=NA;GetRandNums();showBoard(5,5);
+    int res=NA,lastres=NA;GetRandNums();
+	pthread_cond_signal(&CBoard);
     while((ch = getch()) != KEY_F(1)){
+        move(0,0);
+        clrtoeol();
+		pthread_mutex_lock(&MInfo);
+		wclear(MenuWin);
+		memset(sinfo,0,sizeof(sinfo));
+		pthread_mutex_unlock(&MInfo);
+		pthread_cond_signal(&CInfo);
         lastres=res;
+		pthread_mutex_lock(&MBoard);
         switch(ch)
         {
             case KEY_LEFT:case 'H':case 'h':
-                res=Eat(ELEFT);GetRandNums();clear();showBoard(5,5);
+                res=Eat(ELEFT);GetRandNums();
                 break;
             case KEY_RIGHT:case 'L':case 'l':
-                res=Eat(ERIGHT);GetRandNums();clear();showBoard(5,5);
+                res=Eat(ERIGHT);GetRandNums();
                 break;
             case KEY_UP:case 'K':case 'k':
-                res=Eat(EUP);GetRandNums();clear();showBoard(5,5);
+                res=Eat(EUP);GetRandNums();
                 break;
             case KEY_DOWN:case 'J':case 'j':
-                res=Eat(EDOWN);GetRandNums();clear();showBoard(5,5);
+                res=Eat(EDOWN);GetRandNums();
                 break;
             case ':':
+                pthread_mutex_unlock(&MBoard);
                 command();
+                pthread_mutex_lock(&MBoard);
                 break;
             case 3:
+                pthread_mutex_unlock(&MBoard);
                 c_tryQuit();
+                pthread_mutex_lock(&MBoard);
                 break;
         }
-        if(res==lastres&&res==0){die();}
+		pthread_mutex_unlock(&MBoard);
+		pthread_cond_signal (&CBoard);
+        if(res==lastres&&res==0){
+			bool c=die();
+			pthread_cancel(TShow);
+			pthread_cancel(TInfo);
+			pthread_cond_signal (&CInfo);
+			pthread_join(TShow, NULL);
+			pthread_join(TInfo, NULL);
+			wclear(BoardWin);
+			wclear(MenuWin);
+			delwin(BoardWin);
+			delwin(MenuWin);
+			BoardWin=NULL;
+			MenuWin=NULL;
+			return c;
+		}
     }
+	return false;
 }
+
 /// \brief  Print the board to screen
+/// \param  win The window to draw on
 /// \param  offy The y position for the left-up corner
 /// \param  offx The x position for the left-up corner
 /// \return void
-void showBoard(int offy,int offx){
-    move(MENU_POSITION_Y,MENU_POSITION_X);
-    clrtoeol();
-    move(1+WARNING_POSITION_Y,WARNING_POSITION_X);
-    clrtoeol();
-    move(WARNING_POSITION_Y,WARNING_POSITION_X);
-    clrtoeol();
+void showBoard(WINDOW* win,int offy,int offx){
     for(int j=0;j!=N;++j){
         for(int i=0;i!=N;++i){
-            mvprintw(offy+j*2,offx+i*10,"----------");
-            mvprintw(offy+j*2+1,offx+i*10,"|");
-            mvprintw(offy+j*2+1,offx+i*10+1,"         ");
-            attron(COLOR_PAIR(board[curs][j][i]));
-            mvprintw(offy+j*2+1,offx+i*10+5-strlen(Display(board[curs][j][i]))/2,Display(board[curs][j][i]));
-            attroff(COLOR_PAIR(board[curs][j][i]));
+            mvwprintw(win,offy+j*2,offx+i*10,"----------");
+            mvwprintw(win,offy+j*2+1,offx+i*10,"|");
+            mvwprintw(win,offy+j*2+1,offx+i*10+1,"         ");
+            wattron(win,COLOR_PAIR(board[curs][j][i]));
+            mvwprintw(win,offy+j*2+1,offx+i*10+5-strlen(Display(board[curs][j][i]))/2,Display(board[curs][j][i]));
+            wattroff(win,COLOR_PAIR(board[curs][j][i]));
         }
-        mvprintw(offy+j*2,offx+N*10,"-");
-        mvprintw(offy+j*2+1,offx+N*10,"|");
+        mvwprintw(win,offy+j*2,offx+N*10,"-");
+        mvwprintw(win,offy+j*2+1,offx+N*10,"|");
     }
     for(int i=0;i!=N;++i){
-        mvprintw(offy+N*2,offx+i*10,"----------");
+        mvwprintw(win,offy+N*2,offx+i*10,"----------");
     }
-    mvprintw(offy+N*2,offx+N*10,"-");
-    refresh();
+    mvwprintw(win,offy+N*2,offx+N*10,"-");
+    wrefresh(win);
+}
+/// \brief  Print the info to screen
+/// \param  win The window to draw on
+/// \return void
+void showInfo(WINDOW* win){
+	if(!iswarn){
+		mvwprintw(win,MENU_POSITION_Y,MENU_POSITION_X,sinfo);
+	}else{
+		wattron(win,COLOR_PAIR(10));
+		mvwprintw(win,WARNING_POSITION_Y,WARNING_POSITION_X,sinfo);
+		wattroff(win,COLOR_PAIR(10));
+	}
+	wrefresh(win);
 }
 /// \brief  Print welcome message and input the size of the board
 /// \return void
@@ -495,6 +582,13 @@ void welcome(){
     N=(char)(inpN-'0');
     printw("%d\nThe board will be %d.Press any key and rock on!",N,N);
     getch();
+}
+/// \brief  Make (y,x) a 'boom'
+/// \return void
+void c_boom(int y,int x){
+	if(y==NA){y=Rando(N);}
+	if(x==NA){x=Rando(N);}
+	board[curs][y%N][x%N]=20;
 }
 /// \brief  Calculate the checksum for saving
 /// \return The checksum for current board
@@ -593,19 +687,13 @@ void c_loadStr(int iptN,FILE* fp){
                 continue;
             }
         }
-        printw("\n");
     }
-    showBoard(5,5);
     if(c_checksum()==checksum){
-        move(MENU_POSITION_Y,MENU_POSITION_X);
-        clrtoeol();
-        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Game progress loaded successful!");
+        c_info("Game progress loaded successful!");
     }else{
         Clrboard(curs);
-        showBoard(5,5);
         c_warning("Librazy found you are cheating!");
     }
-    refresh();
 }
 /// \brief  Read the saved board
 /// \param  from The number of board to read from
@@ -616,16 +704,16 @@ void c_readBoard(int from){
     }
 	from%=MAX_BOARD_NUM;
     boardseed[curs]=Rando(RAND_MAX);
+	char str[1000];
     if(boardseed[from]==NA){
-        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Librazy found board#%d empty",from);
+		sprintf(str,"Librazy found board#%d empty",from);
+		c_warning(str);
         return;
     }
 	curs=from;
     srand(boardseed[from]);
-    move(MENU_POSITION_Y,MENU_POSITION_X);
-    clrtoeol();
-    showBoard(5,5);
-    mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Load board#%d",curs,boardseed[curs]);
+	sprintf(str,"Load board#%d",curs);
+	c_info(str);
 }
 /// \brief  Read the saved file
 /// \param  boards The number of the saved board.NA for not to use
@@ -646,21 +734,20 @@ void c_readFromDisk(int boards){
         int iptN;
         int iptVer=0;
         fscanf(fp,"%X",&iptVer);
+		char w[1024];
         if(iptVer!=ver){
-            char w[1024];
             sprintf(w,"Librazy found that the game's version dosen't match!\nYour version:%X, saved:%X",ver,iptVer);
             c_warning(w);
             return ;
         }
-        move(WARNING_POSITION_Y,WARNING_POSITION_X);
-        clrtoeol();
-        mvprintw(WARNING_POSITION_Y,WARNING_POSITION_X,"Opening %s",name);
+		sprintf(w,"Opening %s",name);
+        c_info(w);
         fscanf(fp,"%d",&iptN);
         c_loadStr(iptN%MAX_BOARD_SIZE,fp);
     }else{
-        move(MENU_POSITION_Y,MENU_POSITION_X);
-        clrtoeol();
-        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Librazy don't know how to open %s, read file failed",name);
+		char str[1000];
+		sprintf(str,"Librazy don't know how to open %s,\n read file failed",name);
+		c_warning(str);
     }
     fclose(fp);
 }
@@ -670,7 +757,6 @@ void c_readFromDisk(int boards){
 /// \return void
 void c_saveBoard(int to,bool jmp){
     if(to==NA){
-		c_warning("!!");
         to=abs((curs+1)%MAX_BOARD_NUM);
     }
 	to=abs(to%MAX_BOARD_NUM);
@@ -679,11 +765,14 @@ void c_saveBoard(int to,bool jmp){
     memcpy(board[to],board[curs],sizeof(char)*MAX_BOARD_SIZE*MAX_BOARD_SIZE);
     move(MENU_POSITION_Y,MENU_POSITION_X);
     clrtoeol();
+	char str[1000];
     if(jmp){
-        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d, current#%d",curs,to);
+		sprintf(str,"Save board#%d, current#%d",curs,to);
+        c_info(str);
 		curs=to;
     }else{
-        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Save board#%d to #%d",curs,to);
+        sprintf(str,"Save board#%d to #%d",curs,to);
+        c_info(str);
     }
 }
 /// \brief  Calculate the game's version
@@ -698,24 +787,13 @@ int c_version(){
 /// \brief  Ask player whether to quit
 /// \return void
 void c_tryQuit(){
-    move(MENU_POSITION_Y,MENU_POSITION_X);
-    clrtoeol();
-    move(WARNING_POSITION_Y,WARNING_POSITION_X);
-    clrtoeol();
-    move(1+WARNING_POSITION_Y,WARNING_POSITION_X);
-    clrtoeol();
     c_warning("You game progress won't be saved!\nPress q to quit, others to resume");
     int ch=0;
     ch=getch();
     if(ch=='q'||ch=='Q'){
         c_forceQuit();
     }
-    move(MENU_POSITION_Y,MENU_POSITION_X);
-    clrtoeol();
-    move(WARNING_POSITION_Y,WARNING_POSITION_X);
-    clrtoeol();
-    move(1+WARNING_POSITION_Y,WARNING_POSITION_X);
-    clrtoeol();
+    c_info("");
 }
 /// \brief  Write the board to disk
 /// \param  boards The number of board to save
@@ -749,17 +827,13 @@ bool c_writeBoardToDisk(char boards){
         int checksum=c_checksum();
         fprintf(fp,"%d\n",checksum+boardseed[curs]);
         curs=tmp;
-        move(MENU_POSITION_Y,MENU_POSITION_X);
-        clrtoeol();
-        mvprintw(MENU_POSITION_Y,MENU_POSITION_X,"Saved board#%d at %s",boards,name);
+		char str[1000];
+        sprintf(str,"Saved board#%d at %s",boards,name);
+        c_info(str);
         fclose(fp);
         return true;
     }else{
-        move(WARNING_POSITION_Y,WARNING_POSITION_X);
-        clrtoeol();
-        move(1+WARNING_POSITION_Y,WARNING_POSITION_X);
-        clrtoeol();
-        char str[100];
+        char str[1000];
         sprintf(str,"Librazy don't know how to open %s,\nsave failed",name);
         c_warning(str);
         fclose(fp);
@@ -768,15 +842,74 @@ bool c_writeBoardToDisk(char boards){
     
     
 }
-/// \brief  Print a warning to screen
-/// \param  warn The string to print
+/// \brief  To print a warning to screen
+/// 
+/// 		 The function storage the message in a buffer and call up the TInfo thread to print it
+/// \param  msg The string to print
 /// \return void
-void c_warning(char* warn){
-    attron(COLOR_PAIR(10)|A_BOLD);
-    mvprintw(WARNING_POSITION_Y,WARNING_POSITION_X,warn);
-    attroff(COLOR_PAIR(10)|A_BOLD);
-    refresh();
+void c_warning(char* msg){
+	pthread_mutex_lock(&MInfo);
+	memset(sinfo,0,sizeof(sinfo));
+	strcpy(sinfo,msg);
+	iswarn=true;
+	pthread_mutex_unlock(&MInfo);
+	pthread_cond_signal (&CInfo);
 }
+/// \brief  To print a info to screen
+/// 
+/// 		 The function storage the message in a buffer and call up the TInfo thread to print it
+/// \param  msg The string to print
+/// \return void
+void c_info(char* msg){
+	pthread_mutex_lock(&MInfo);
+	memset(sinfo,0,sizeof(sinfo));
+	strcpy(sinfo,msg);
+	iswarn=false;
+	pthread_mutex_unlock(&MInfo);
+	pthread_cond_signal (&CInfo);
+}
+/// \brief  The thread to print infos to screen
+/// \param  arg Void
+/// \return void* NULL
+void* t_Info(void* arg){
+	if(MenuWin!=NULL)delwin(MenuWin);
+	MenuWin = newwin(2, col,row-2, 0);
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS , NULL);
+	int oldtype;
+	while(1){;
+		pthread_mutex_lock(&MInfo);
+		pthread_cond_wait (&CInfo, &MInfo);
+		pthread_testcancel();
+		pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
+		wclear(MenuWin);
+		showInfo(MenuWin);
+		pthread_mutex_unlock(&MInfo);
+		pthread_setcanceltype(oldtype, NULL);
+	}
+	return NULL;
+}
+/// \brief  The thread to print Board to screen
+/// \param  arg Void
+/// \return void* NULL
+void* t_Show(void* arg){
+	if(BoardWin!=NULL)delwin(BoardWin);
+	BoardWin = newwin(row-6, col, 1, 0);
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS , NULL);
+	int oldtype;
+	while(1){
+		pthread_testcancel();
+		pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
+		pthread_mutex_lock(&MBoard);
+		pthread_testcancel();
+		wclear(BoardWin);
+		showBoard(BoardWin,0,5);
+		pthread_cond_wait (&CBoard, &MBoard);
+		pthread_mutex_unlock(&MBoard);
+		pthread_setcanceltype(oldtype, NULL);
+	}
+	return NULL;
+}
+
 /// \brief  Main executable
 /// \return 0
 int main()
@@ -789,8 +922,23 @@ int main()
     raw();
     if(has_colors())start_color();
     settings();
-    welcome();
-    play();
+	
+	pthread_attr_init (&AThread);
+	pthread_attr_setdetachstate (&AThread, PTHREAD_CREATE_JOINABLE);
+	bool cho=true;
+	while(cho){
+		pthread_mutex_init (&MBoard, NULL);
+		pthread_cond_init (&CBoard, NULL);
+		pthread_mutex_init (&MInfo, NULL);
+		pthread_cond_init (&CInfo, NULL);
+		Clrboard(curs);
+		welcome();
+		cho=play();
+		pthread_mutex_destroy (&MInfo);
+		pthread_cond_destroy (&CInfo);
+		pthread_mutex_destroy (&MBoard);
+		pthread_cond_destroy (&CBoard);
+	}
     getch();
     clear();
     endwin();
