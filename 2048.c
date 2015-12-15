@@ -107,6 +107,8 @@ Thrd TInfo;
 Mut MBoard;
 /*! The mutex of Info */
 Mut MInfo;
+/*! The mutex of Screen */
+Mut MScr;
 /*! The condition of board */
 Cond CBoard;
 /*! The condition of info */
@@ -475,7 +477,9 @@ bool play(){
         move(0,0);
         clrtoeol();
 		pthread_mutex_lock(&MInfo);
+		pthread_mutex_lock(&MScr);
 		wclear(MenuWin);
+		pthread_mutex_unlock(&MScr);
 		memset(sinfo,0,sizeof(sinfo));
 		pthread_mutex_unlock(&MInfo);
 		pthread_cond_signal(&CInfo);
@@ -881,8 +885,10 @@ void* t_Info(void* arg){
 		pthread_cond_wait (&CInfo, &MInfo);
 		pthread_testcancel();
 		pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
+		pthread_mutex_lock(&MScr);
 		wclear(MenuWin);
 		showInfo(MenuWin);
+		pthread_mutex_unlock(&MScr);
 		pthread_mutex_unlock(&MInfo);
 		pthread_setcanceltype(oldtype, NULL);
 	}
@@ -901,8 +907,10 @@ void* t_Show(void* arg){
 		pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
 		pthread_mutex_lock(&MBoard);
 		pthread_testcancel();
+		pthread_mutex_lock(&MScr);
 		wclear(BoardWin);
 		showBoard(BoardWin,0,5);
+		pthread_mutex_unlock(&MScr);
 		pthread_cond_wait (&CBoard, &MBoard);
 		pthread_mutex_unlock(&MBoard);
 		pthread_setcanceltype(oldtype, NULL);
@@ -931,9 +939,11 @@ int main()
 		pthread_cond_init (&CBoard, NULL);
 		pthread_mutex_init (&MInfo, NULL);
 		pthread_cond_init (&CInfo, NULL);
+		pthread_mutex_init (&MScr, NULL);
 		Clrboard(curs);
 		welcome();
 		cho=play();
+		pthread_mutex_destroy (&MScr);
 		pthread_mutex_destroy (&MInfo);
 		pthread_cond_destroy (&CInfo);
 		pthread_mutex_destroy (&MBoard);

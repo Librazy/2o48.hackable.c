@@ -3,5 +3,8 @@ latex/
 man/
 rtf/
 xml/
+*.id*
+*.nam
+*.til
 *.exe
 *.save
