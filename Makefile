@@ -16,35 +16,35 @@ all:allw linux
 
 allw: wino winx86 gdio gdix86
 
-win:2048.c ./include/ncurses.h ./lib/libpdcurses.a
-	gcc -O4 -Wall -std=gnu11 ./lib/libpdcurses.a ./lib/libpthreadX64GC2.a 2048.c -o 2048 -L./lib/ -lpdcurses -lpthreadX64GC2 -DLOCAL_NCURSES
+win:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libpdcurses.a
+	gcc -O4 -Wall -std=gnu11 -I./include/ ./lib/libpdcurses.a ./lib/libpthreadX64GC2.a ./include/dyad.c 2048.c -o 2048 -L./lib/ -lpdcurses -lpthreadX64GC2 -lws2_32 -DLOCAL_NCURSES
 
-wind:2048.c ./include/ncurses.h ./lib/libpdcurses.a
-	gcc -g3 -Wall -std=gnu11 ./lib/libpdcurses.a ./lib/libpthreadX64GC2.a 2048.c -o 2048d -L./lib/ -lpdcurses -lpthreadX64GC2 -DLOCAL_NCURSES
+wind:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libpdcurses.a
+	gcc -g3 -Wall -std=gnu11 -I./include/ ./lib/libpdcurses.a ./lib/libpthreadX64GC2.a ./include/dyad.c 2048.c -o 2048d -L./lib/ -lpdcurses -lpthreadX64GC2 -lws2_32 -DLOCAL_NCURSES
 
-windo:2048.c ./include/ncurses.h ./lib/libpdcurses.a
-	gcc -O4 -march=native -g3 -Wall -std=gnu11 ./lib/libpdcurses.a ./lib/libpthreadX64GC2.a 2048.c -o 2048do -L./lib/ -lpdcurses -lpthreadX64GC2 -DLOCAL_NCURSES
+windo:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libpdcurses.a
+	gcc -O4 -march=native -g3 -Wall -std=gnu11 -I./include/ ./lib/libpdcurses.a ./lib/libpthreadX64GC2.a ./include/dyad.c 2048.c -o 2048do -L./lib/ -lpdcurses -lpthreadX64GC2 -lws2_32 -DLOCAL_NCURSES
 
-wino:2048.c ./include/ncurses.h ./lib/libpdcurses.a
-	gcc -O4 -march=native -Wall -std=gnu11 ./lib/libpdcurses.a ./lib/libpthreadX64GC2.a 2048.c -o 2048 -L./lib/ -lpdcurses -lpthreadX64GC2 -DLOCAL_NCURSES
+wino:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libpdcurses.a
+	gcc -O4 -march=native -Wall -std=gnu11 -I./include/ ./lib/libpdcurses.a ./lib/libpthreadX64GC2.a ./include/dyad.c 2048.c -o 2048 -L./lib/ -lpdcurses -lpthreadX64GC2 -lws2_32 -DLOCAL_NCURSES
     
-winx86:2048.c ./include/ncurses.h ./lib/libpdcursesx86.a
-	gcc -O4 -Wall -std=gnu11 ./lib/libpdcursesx86.a ./lib/libpthreadX86GC2.a 2048.c -o 2048x86 -L./lib/ -lpdcursesx86 -lpthreadX86GC2 -m32 -DLOCAL_NCURSES
+winx86:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libpdcursesx86.a
+	gcc -O4 -Wall -std=gnu11 -I./include/ ./lib/libpdcursesx86.a ./lib/libpthreadX86GC2.a ./include/dyad.c 2048.c -o 2048x86 -L./lib/ -lpdcursesx86 -lpthreadX86GC2 -m32 -lws2_32 -DLOCAL_NCURSES
     
-gdi:2048.c ./include/ncurses.h ./lib/libcursesgdi.a
-	gcc -O4 -Wall -std=gnu11 -mwindows ./lib/libcursesgdi.a ./lib/libpthreadX64GC2.a 2048.c -o 2048gdi -L./lib/ -lcursesgdi -lpthreadX64GC2 -lgdi32 -lcomdlg32 -DLOCAL_NCURSES
+gdi:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libcursesgdi.a
+	gcc -O4 -Wall -std=gnu11 -I./include/ -mwindows ./lib/libcursesgdi.a ./lib/libpthreadX64GC2.a ./include/dyad.c 2048.c -o 2048gdi -L./lib/ -lcursesgdi -lpthreadX64GC2 -lgdi32 -lcomdlg32 -lws2_32 -DLOCAL_NCURSES
 
-gdio:2048.c ./include/ncurses.h ./lib/libcursesgdi.a
-	gcc -O4 -march=native -Wall -std=gnu11 -mwindows ./lib/libcursesgdi.a ./lib/libpthreadX64GC2.a 2048.c -o 2048gdi -L./lib/ -lcursesgdi -lpthreadX64GC2 -lgdi32 -lcomdlg32 -DLOCAL_NCURSES
+gdio:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libcursesgdi.a
+	gcc -O4 -march=native -Wall -std=gnu11 -I./include/ -mwindows ./lib/libcursesgdi.a ./lib/libpthreadX64GC2.a ./include/dyad.c 2048.c -o 2048gdi -L./lib/ -lcursesgdi -lpthreadX64GC2 -lgdi32 -lcomdlg32 -lws2_32 -DLOCAL_NCURSES
     
-gdix86:2048.c ./include/ncurses.h ./lib/libcursesgdix86.a
-	gcc -O4 -Wall -std=gnu11 -mwindows ./lib/libcursesgdix86.a ./lib/libpthreadX86GC2.a 2048.c -o 2048gdix86 -L./lib/ -lcursesgdix86 -lpthreadX86GC2 -lgdi32 -lcomdlg32 -m32 -DLOCAL_NCURSES
+gdix86:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libcursesgdix86.a
+	gcc -O4 -Wall -std=gnu11 -I./include/ -mwindows ./lib/libcursesgdix86.a ./lib/libpthreadX86GC2.a ./include/dyad.c 2048.c -o 2048gdix86 -L./lib/ -lcursesgdix86 -lpthreadX86GC2 -lgdi32 -lcomdlg32 -m32 -lws2_32 -DLOCAL_NCURSES
     
-gnu:2048.c
-	gcc -O4 -Wall -std=gnu11 2048.c -o 2048 -lcurses -lpthread
+gnu:./include/dyad.c 2048.c
+	gcc -O4 -Wall -std=gnu11 -I./include/ ./include/dyad.c 2048.c -o 2048 -lcurses -lpthread
 
-gnuo:2048.c
-	gcc -O4 -march=native -Wall -std=gnu11 2048.c -o 2048 -lcurses -lpthread
+gnuo:./include/dyad.c 2048.c
+	gcc -O4 -march=native -Wall -std=gnu11 -I./include/ ./include/dyad.c 2048.c -o 2048 -lcurses -lpthread
     
 wclean:
 	if exist *.obj del *.obj

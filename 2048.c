@@ -11,8 +11,8 @@
 	#include <ncurses.h>
 	#include <pthread.h>
 #else 
-	#include "./include/ncurses.h"
-	#include "./include/pthread.h"
+	#include "ncurses.h"
+	#include "pthread.h"
 #endif
 typedef pthread_mutex_t Mut;
 typedef pthread_cond_t Cond;
@@ -22,6 +22,8 @@ typedef pthread_t Thrd;
 #include <stdbool.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
+#include "dyad.h"
 const int NA=126;                   /**< Stand for invalid grid. */
 /*!
  *  The maxium board num (for saving in game)
@@ -98,7 +100,15 @@ int row,col;
 char sinfo[512];
 /*! If the message is a warning */
 bool iswarn;
+/*! If the game is in networking mode */
+bool isnetworking;
 
+bool connecting=false;
+
+dyad_Stream *SClient;
+dyad_Stream *SServ;
+dyad_Stream *STmp;
+dyad_Stream *SGaming;
 /*! The handle of t_Show thread */
 Thrd TShow;
 /*! The handle of t_Info thread */
@@ -109,10 +119,16 @@ Mut MBoard;
 Mut MInfo;
 /*! The mutex of Screen */
 Mut MScr;
+/*! The mutex of Network connecting */
+Mut MNetC;
+/*! The mutex of Networking */
+Mut MNet;
 /*! The condition of board */
 Cond CBoard;
 /*! The condition of info */
 Cond CInfo;
+/*! The condition of network connecting  */
+Cond CNetC;
 /*! The attr of threads */
 Attr AThread;
 /*! The window to display board */
@@ -204,6 +220,16 @@ unsigned int Rando(int N);
 
 void* t_Show(void* arg);
 void* t_Info(void* arg);
+void* t_Updater(void* arg);
+
+static void s_Accept(dyad_Event *e);
+static void s_Init(dyad_Event *e);
+static void n_Data(dyad_Event *e);
+static void g_Error(dyad_Event *e);
+static void n_Init(dyad_Event *e);
+static void g_Data(dyad_Event *e);
+
+
 
 /// \brief  Align the vertical direction
 /// \param  curcol Current column to align
@@ -391,7 +417,7 @@ void c_readFromDisk(int boards);
 void c_saveBoard(int to,bool jmp);
 void c_tryQuit();
 int  c_version();
-void c_warning(char* msg);
+void c_warning(const char* msg);
 void c_info(char* msg);
 bool c_writeBoardToDisk(char board);
 
@@ -467,7 +493,6 @@ bool play(){
     srand(boardseed[curs]);
     Clrboard(curs);
 	clear();
-	pthread_create (&TInfo, &AThread, t_Info, NULL);
     pthread_create (&TShow, &AThread, t_Show, NULL);
     keypad(stdscr, TRUE);
     int ch=0;
@@ -582,10 +607,47 @@ void welcome(){
     mvprintw(row-3,0,"Welcome to :2048 by Librazy\n");
     printw("Enter a number<=9 that you want the board be:");
     int inpN=4+'0';
-    while(1){inpN=getch();if(inpN>'0'&&inpN<='9')break;}
+    while(1){
+		inpN=getch();
+		if(inpN>'0'&&inpN<='9')break;
+		if(inpN=='n'||inpN=='N'){
+			mvprintw(row-3,0,"Networking mode now,enter ip you want to connect\n");clrtoeol();move(row-2,0);echo();
+			char ipstr[130]={0};
+			while(scanw("%127s",ipstr)!=1){mvprintw(row-3,0,"Networking mode now,enter ip you want to connect!\n");clrtoeol();move(row-2,0);}
+			noecho();
+			SClient = dyad_newStream();
+			printw(ipstr);
+			printw(",Enter a number<=9 that you want the board be:");
+			while(1){
+				inpN=getch();
+				if(inpN>'0'&&inpN<='9'){printw("%d",inpN);
+					N=(char)(inpN-'0');break;
+				}
+			}
+			pthread_create (&TInfo, &AThread, t_Info, NULL);
+			connecting=true;
+			dyad_addListener(SClient, DYAD_EVENT_DATA, n_Data, NULL);
+			dyad_addListener(SClient, DYAD_EVENT_ERROR, g_Error, NULL);
+			dyad_connect(SClient,ipstr, 2048);
+			return;
+		}
+		if(inpN=='s'||inpN=='S'){
+			move(row-3,0);clrtoeol();
+			mvprintw(row-3,0,"Serving mode now,listening port 2048\n");clrtoeol();move(row-2,0);
+			refresh();
+			SServ = dyad_newStream();
+			pthread_create (&TInfo, &AThread, t_Info, NULL);
+			connecting=true;
+			dyad_addListener(SServ, DYAD_EVENT_ERROR, g_Error, NULL);
+			dyad_addListener(SServ, DYAD_EVENT_ACCEPT, s_Accept, NULL);
+			dyad_listen(SServ, 2048);
+			return;
+		}
+	}
     N=(char)(inpN-'0');
     printw("%d\nThe board will be %d.Press any key and rock on!",N,N);
     getch();
+	pthread_create (&TInfo, &AThread, t_Info, NULL);
 }
 /// \brief  Make (y,x) a 'boom'
 /// \return void
@@ -653,6 +715,7 @@ void c_currentStr(bool show){
 /// \brief  Quit the game
 /// \return void
 void c_forceQuit(){
+	dyad_shutdown();
     clear();
     endwin();
     exit(0);
@@ -851,7 +914,7 @@ bool c_writeBoardToDisk(char boards){
 /// 		 The function storage the message in a buffer and call up the TInfo thread to print it
 /// \param  msg The string to print
 /// \return void
-void c_warning(char* msg){
+void c_warning(const char* msg){
 	pthread_mutex_lock(&MInfo);
 	memset(sinfo,0,sizeof(sinfo));
 	strcpy(sinfo,msg);
@@ -918,6 +981,69 @@ void* t_Show(void* arg){
 	return NULL;
 }
 
+static void s_Accept(dyad_Event *e) {
+	connecting=false;
+	dyad_writef(e->remote,"ACC\n");
+	c_warning("C0");
+	dyad_removeListener(SServ, DYAD_EVENT_ACCEPT, s_Accept, NULL);
+	dyad_addListener(e->remote, DYAD_EVENT_DATA, s_Init, NULL);
+}
+static void s_Init(dyad_Event *e) {
+	int cliver=0,val=0,cliN;
+	val=sscanf(e->data,"VERSION %X %d",&cliver,&cliN);
+	if(cliver!=c_version()||val!=2){
+		dyad_writef(e->stream,"INCOMP\n");
+		c_warning("Incompatiable version!Quit.");
+		dyad_update();
+		dyad_end(SServ);
+		getch();
+		c_forceQuit();
+	}else{
+		SGaming=SServ;
+		N=cliN;
+		isnetworking=true;
+		dyad_writef(e->stream,"si\n");
+		dyad_removeListener(e->stream, DYAD_EVENT_DATA, s_Init, NULL);
+		dyad_addListener(e->stream, DYAD_EVENT_DATA, g_Data, NULL);
+	}
+}
+static void n_Data(dyad_Event *e) {
+	connecting=false;
+	c_warning("nD0");
+	int ver=c_version();
+	dyad_writef(e->stream, "VERSION %X %d\n",ver,N);dyad_update();
+	c_warning("nD1");
+	dyad_removeListener(e->stream, DYAD_EVENT_CONNECT, n_Data, NULL);
+	c_warning("nD2");
+	dyad_addListener(e->stream, DYAD_EVENT_DATA, n_Init, NULL);
+	c_warning("nD3");
+}
+static void n_Init(dyad_Event *e) {
+	if (!memcmp(e->data, "INCOMP", 6)) {
+		c_warning("nI0");
+		c_warning("Incompatiable version!Press any key to quit.");
+		dyad_end(e->stream);
+		getch();
+		c_forceQuit();
+	}else{
+		c_warning("nI1");
+		SGaming=SClient;
+		isnetworking=true;
+		c_warning("nI2");
+		dyad_removeAllListeners(e->stream, DYAD_EVENT_DATA);
+		dyad_addListener(e->stream, DYAD_EVENT_DATA, g_Data, NULL);
+	}
+}
+static void g_Data(dyad_Event *e) {
+	c_warning("C3");
+	dyad_writef(e->stream,"gd\n");
+}
+static void g_Error(dyad_Event *e) {
+	connecting=false;
+	c_warning(e->msg);
+	dyad_end(e->remote);
+	c_forceQuit();
+}
 /// \brief  Main executable
 /// \return 0
 int main()
@@ -930,7 +1056,7 @@ int main()
     raw();
     if(has_colors())start_color();
     settings();
-	
+	dyad_init();
 	pthread_attr_init (&AThread);
 	pthread_attr_setdetachstate (&AThread, PTHREAD_CREATE_JOINABLE);
 	bool cho=true;
@@ -940,17 +1066,28 @@ int main()
 		pthread_mutex_init (&MInfo, NULL);
 		pthread_cond_init (&CInfo, NULL);
 		pthread_mutex_init (&MScr, NULL);
+		pthread_mutex_init (&MNet, NULL);
+		pthread_mutex_init (&MNetC, NULL);
+		pthread_cond_init (&CNetC, NULL);
 		Clrboard(curs);
 		welcome();
-		cho=play();
+		if(connecting){
+			while (dyad_getStreamCount() > 0) {
+				dyad_update();
+			}
+		}else{
+			cho=play();
+		}
 		pthread_mutex_destroy (&MScr);
 		pthread_mutex_destroy (&MInfo);
 		pthread_cond_destroy (&CInfo);
 		pthread_mutex_destroy (&MBoard);
 		pthread_cond_destroy (&CBoard);
+		pthread_mutex_destroy (&MNet);
+		pthread_mutex_destroy (&MNetC);
+		pthread_cond_destroy (&CNetC);
+		if(isnetworking){c_forceQuit();}
 	}
-    getch();
-    clear();
-    endwin();
+	c_forceQuit();
     return 0;
 }
