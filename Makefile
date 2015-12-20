@@ -1,16 +1,16 @@
 help:
-	@ echo Run one of the following command lines:
-	@ echo make allw     (to build the four Windows executable below)
-	@ echo make win      (to build the Windows X64 executable)
-	@ echo make wino     (to build the Windows X64 executable with optimization for current CPU)
-	@ echo make winx86   (to build the Windows X86 executable)
-	@ echo make gdi      (to build the Windows X64 executable using gdi)
-	@ echo make gdi      (to build the Windows X64 executable using gdi with optimization for current CPU)
-	@ echo make gdix86   (to build the Windows X86 executable using gdi)
-	@ echo make gnu      (to build the linux executable)
-	@ echo make gnuo     (to build the linux executable with optimization for current CPU)
-	@ echo make wclean   (to clean up the working directory for Windows)
-	@ echo make clean   (to clean up the working directory for Unix)
+	@ echo "Run one of the following command lines:"
+	@ echo "make allw     (to build the four Windows executable below)"
+	@ echo "make win      (to build the Windows X64 executable)"
+	@ echo "make wino     (to build the Windows X64 executable with optimization for current CPU)"
+	@ echo "make winx86   (to build the Windows X86 executable)"
+	@ echo "make gdi      (to build the Windows X64 executable using gdi)"
+	@ echo "make gdi      (to build the Windows X64 executable using gdi with optimization for current CPU)"
+	@ echo "make gdix86   (to build the Windows X86 executable using gdi)"
+	@ echo "make gnu      (to build the linux executable)"
+	@ echo "make gnuo     (to build the linux executable with optimization for current CPU)"
+	@ echo "make wclean   (to clean up the working directory for Windows)"
+	@ echo "make clean   (to clean up the working directory for Unix)"
 
 all:allw linux
 
@@ -41,10 +41,10 @@ gdix86:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libcursesgdix86.a
 	gcc -O4 -Wall -std=gnu11 -I./include/ -mwindows ./lib/libcursesgdix86.a ./lib/libpthreadX86GC2.a ./include/dyad.c 2048.c -o 2048gdix86 -L./lib/ -lcursesgdix86 -lpthreadX86GC2 -lgdi32 -lcomdlg32 -m32 -lws2_32 -DLOCAL_NCURSES
     
 gnu:./include/dyad.c 2048.c
-	gcc -O4 -Wall -std=gnu11 -I./include/ ./include/dyad.c 2048.c -o 2048 -lcurses -lpthread
+	gcc -O4 -Wall -std=gnu11 ./include/dyad.c 2048.c -o 2048 -lcurses -lpthread
 
 gnuo:./include/dyad.c 2048.c
-	gcc -O4 -march=native -Wall -std=gnu11 -I./include/ ./include/dyad.c 2048.c -o 2048 -lcurses -lpthread
+	gcc -O4 -march=native -Wall -std=gnu11 ./include/dyad.c 2048.c -o 2048 -lcurses -lpthread
     
 wclean:
 	if exist *.obj del *.obj

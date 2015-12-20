@@ -23,7 +23,12 @@ typedef pthread_t Thrd;
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
-#include "dyad.h"
+#ifndef LOCAL_NCURSES
+	#include "./include/dyad.h"
+#else 
+	#include "dyad.h"
+#endif
+
 const int NA=126;                   /**< Stand for invalid grid. */
 /*!
  *  The maxium board num (for saving in game)
@@ -640,7 +645,7 @@ void welcome(){
 			connecting=true;
 			dyad_addListener(SServ, DYAD_EVENT_ERROR, g_Error, NULL);
 			dyad_addListener(SServ, DYAD_EVENT_ACCEPT, s_Accept, NULL);
-			dyad_listen(SServ, 2048);
+			dyad_listenEx(SServ, "0.0.0.0",2048,1);//Force IPv4
 			return;
 		}
 	}
