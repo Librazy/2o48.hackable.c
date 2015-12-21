@@ -8,11 +8,11 @@
  */ 
 #define PWD_LEN 5
 #ifndef LOCAL_NCURSES
-	#include <ncurses.h>
-	#include <pthread.h>
+    #include <ncurses.h>
+    #include <pthread.h>
 #else 
-	#include "ncurses.h"
-	#include "pthread.h"
+    #include "ncurses.h"
+    #include "pthread.h"
 #endif
 typedef pthread_mutex_t Mut;
 typedef pthread_cond_t Cond;
@@ -24,9 +24,9 @@ typedef pthread_t Thrd;
 #include <time.h>
 #include <unistd.h>
 #ifndef LOCAL_NCURSES
-	#include "./include/dyad.h"
+    #include "./include/dyad.h"
 #else 
-	#include "dyad.h"
+    #include "dyad.h"
 #endif
 
 const int NA=126;                   /**< Stand for invalid grid. */
@@ -114,6 +114,11 @@ dyad_Stream *SClient;
 dyad_Stream *SServ;
 dyad_Stream *STmp;
 dyad_Stream *SGaming;
+
+/*! The handle of t_NetworkPlay thread */
+Thrd TNetworkPlay;
+/*! The handle of t_NetworkShow thread */
+Thrd TNetworkShow;
 /*! The handle of t_Show thread */
 Thrd TShow;
 /*! The handle of t_Info thread */
@@ -133,7 +138,7 @@ Cond CBoard;
 /*! The condition of info */
 Cond CInfo;
 /*! The condition of network connecting  */
-Cond CNetC;
+Cond CNet;
 /*! The attr of threads */
 Attr AThread;
 /*! The window to display board */
@@ -183,12 +188,12 @@ void settings(){
     strcpy(display[18],"whuang6");
     strcpy(display[19],"whuang7");
     strcpy(display[20],"boom");
-	for(int i=1;i<20;++i){
-		eat[i][20][1]=i-1;
-		eat[20][i][1]=i-1;
-		eat[i][20][0]=i-2;
-		eat[20][i][0]=i-2;
-	}
+    for(int i=1;i<20;++i){
+        eat[i][20][1]=i-1;
+        eat[20][i][1]=i-1;
+        eat[i][20][0]=i-2;
+        eat[20][i][0]=i-2;
+    }
     init_pair(0, COLOR_WHITE, COLOR_BLACK);
     init_pair(1, COLOR_RED, COLOR_BLACK);
     init_pair(2, COLOR_MAGENTA, COLOR_BLACK);
@@ -302,21 +307,21 @@ char AlignLine(int curline,int direction){
 /// \return The final value of a
 char CheckEat(char* a,char* b){
     if(*a==0||*b==0||*a==NA||*b==NA)return NA;//If empty
-	if(*a==20){
-		*a=*b-1;
-		*b=*b-2;
-		return *a;
-	}
-    if(*a==*b){
-		if(*a>=1&&*b>=1&&*a<=18&&*b<=18){
-			*a=*a+1;*b=NA;return *a;
-		}else{
-			*a=eat[(int)*a][(int)*b][0];
-			*b=eat[(int)*a][(int)*b][1];
-			return eat[(int)*a][(int)*b][0];
-		}
+    if(*a==20){
+        *a=*b-1;
+        *b=*b-2;
+        return *a;
     }
-	return NA;
+    if(*a==*b){
+        if(*a>=1&&*b>=1&&*a<=18&&*b<=18){
+            *a=*a+1;*b=NA;return *a;
+        }else{
+            *a=eat[(int)*a][(int)*b][0];
+            *b=eat[(int)*a][(int)*b][1];
+            return eat[(int)*a][(int)*b][0];
+        }
+    }
+    return NA;
 }
 /// \brief  Empty the board specified
 /// \param  boardToClr The board to empty
@@ -452,11 +457,11 @@ void command(){
     }else if(strcmp(cmd,"w")==0||strcmp(cmd,"write")==0){
         c_writeBoardToDisk(NA);
     }else if(strcmp(cmd,"wb")==0||strcmp(cmd,"writeboard")==0){
-		if(NA==arg){
-			c_warning("Librazy don't know which board should be saved");
-		}else{
-			c_writeBoardToDisk(arg);
-		}
+        if(NA==arg){
+            c_warning("Librazy don't know which board should be saved");
+        }else{
+            c_writeBoardToDisk(arg,true);
+        }
     }else if(strcmp(cmd,"wq")==0||strcmp(cmd,"writequit")==0){
         if(c_writeBoardToDisk(NA))c_forceQuit();
     }else if(strcmp(cmd,"q!")==0||strcmp(cmd,"quit!")==0){
@@ -479,15 +484,15 @@ bool die(){
     int ch;
     while((ch=getch())){
         switch(ch){
-			case 'r':case 'R':
-				return 1;
-				break;
+            case 'r':case 'R':
+                return 1;
+                break;
             case 'q':case 'Q':
                 c_forceQuit();
                 break;
         }
     }
-	return 0;
+    return 0;
 }
 /// \brief  Handle for main game
 /// \return If restart
@@ -497,24 +502,24 @@ bool play(){
     }
     srand(boardseed[curs]);
     Clrboard(curs);
-	clear();
+    clear();
     pthread_create (&TShow, &AThread, t_Show, NULL);
     keypad(stdscr, TRUE);
     int ch=0;
     int res=NA,lastres=NA;GetRandNums();
-	pthread_cond_signal(&CBoard);
+    pthread_cond_signal(&CBoard);
     while((ch = getch()) != KEY_F(1)){
         move(0,0);
         clrtoeol();
-		pthread_mutex_lock(&MInfo);
-		pthread_mutex_lock(&MScr);
-		wclear(MenuWin);
-		pthread_mutex_unlock(&MScr);
-		memset(sinfo,0,sizeof(sinfo));
-		pthread_mutex_unlock(&MInfo);
-		pthread_cond_signal(&CInfo);
+        pthread_mutex_lock(&MInfo);
+        pthread_mutex_lock(&MScr);
+        wclear(MenuWin);
+        pthread_mutex_unlock(&MScr);
+        memset(sinfo,0,sizeof(sinfo));
+        pthread_mutex_unlock(&MInfo);
+        pthread_cond_signal(&CInfo);
         lastres=res;
-		pthread_mutex_lock(&MBoard);
+        pthread_mutex_lock(&MBoard);
         switch(ch)
         {
             case KEY_LEFT:case 'H':case 'h':
@@ -540,25 +545,25 @@ bool play(){
                 pthread_mutex_lock(&MBoard);
                 break;
         }
-		pthread_mutex_unlock(&MBoard);
-		pthread_cond_signal (&CBoard);
+        pthread_mutex_unlock(&MBoard);
+        pthread_cond_signal (&CBoard);
         if(res==lastres&&res==0){
-			bool c=die();
-			pthread_cancel(TShow);
-			pthread_cancel(TInfo);
-			pthread_cond_signal (&CInfo);
-			pthread_join(TShow, NULL);
-			pthread_join(TInfo, NULL);
-			wclear(BoardWin);
-			wclear(MenuWin);
-			delwin(BoardWin);
-			delwin(MenuWin);
-			BoardWin=NULL;
-			MenuWin=NULL;
-			return c;
-		}
+            bool c=die();
+            pthread_cancel(TShow);
+            pthread_cancel(TInfo);
+            pthread_cond_signal (&CInfo);
+            pthread_join(TShow, NULL);
+            pthread_join(TInfo, NULL);
+            wclear(BoardWin);
+            wclear(MenuWin);
+            delwin(BoardWin);
+            delwin(MenuWin);
+            BoardWin=NULL;
+            MenuWin=NULL;
+            return c;
+        }
     }
-	return false;
+    return false;
 }
 
 /// \brief  Print the board to screen
@@ -589,14 +594,14 @@ void showBoard(WINDOW* win,int offy,int offx){
 /// \param  win The window to draw on
 /// \return void
 void showInfo(WINDOW* win){
-	if(!iswarn){
-		mvwprintw(win,MENU_POSITION_Y,MENU_POSITION_X,sinfo);
-	}else{
-		wattron(win,COLOR_PAIR(10));
-		mvwprintw(win,WARNING_POSITION_Y,WARNING_POSITION_X,sinfo);
-		wattroff(win,COLOR_PAIR(10));
-	}
-	wrefresh(win);
+    if(!iswarn){
+        mvwprintw(win,MENU_POSITION_Y,MENU_POSITION_X,sinfo);
+    }else{
+        wattron(win,COLOR_PAIR(10));
+        mvwprintw(win,WARNING_POSITION_Y,WARNING_POSITION_X,sinfo);
+        wattroff(win,COLOR_PAIR(10));
+    }
+    wrefresh(win);
 }
 /// \brief  Print welcome message and input the size of the board
 /// \return void
@@ -613,53 +618,53 @@ void welcome(){
     printw("Enter a number<=9 that you want the board be:");
     int inpN=4+'0';
     while(1){
-		inpN=getch();
-		if(inpN>'0'&&inpN<='9')break;
-		if(inpN=='n'||inpN=='N'){
-			mvprintw(row-3,0,"Networking mode now,enter ip you want to connect\n");clrtoeol();move(row-2,0);echo();
-			char ipstr[130]={0};
-			while(scanw("%127s",ipstr)!=1){mvprintw(row-3,0,"Networking mode now,enter ip you want to connect!\n");clrtoeol();move(row-2,0);}
-			noecho();
-			SClient = dyad_newStream();
-			printw(ipstr);
-			printw(",Enter a number<=9 that you want the board be:");
-			while(1){
-				inpN=getch();
-				if(inpN>'0'&&inpN<='9'){printw("%d",inpN);
-					N=(char)(inpN-'0');break;
-				}
-			}
-			pthread_create (&TInfo, &AThread, t_Info, NULL);
-			connecting=true;
-			dyad_addListener(SClient, DYAD_EVENT_DATA, n_Data, NULL);
-			dyad_addListener(SClient, DYAD_EVENT_ERROR, g_Error, NULL);
-			dyad_connect(SClient,ipstr, 2048);
-			return;
-		}
-		if(inpN=='s'||inpN=='S'){
-			move(row-3,0);clrtoeol();
-			mvprintw(row-3,0,"Serving mode now,listening port 2048\n");clrtoeol();move(row-2,0);
-			refresh();
-			SServ = dyad_newStream();
-			pthread_create (&TInfo, &AThread, t_Info, NULL);
-			connecting=true;
-			dyad_addListener(SServ, DYAD_EVENT_ERROR, g_Error, NULL);
-			dyad_addListener(SServ, DYAD_EVENT_ACCEPT, s_Accept, NULL);
-			dyad_listenEx(SServ, "0.0.0.0",2048,1);//Force IPv4
-			return;
-		}
-	}
+        inpN=getch();
+        if(inpN>'0'&&inpN<='9')break;
+        if(inpN=='n'||inpN=='N'){
+            mvprintw(row-3,0,"Networking mode now,enter ip you want to connect\n");clrtoeol();move(row-2,0);echo();
+            char ipstr[130]={0};
+            while(scanw("%127s",ipstr)!=1){mvprintw(row-3,0,"Networking mode now,enter ip you want to connect!\n");clrtoeol();move(row-2,0);}
+            noecho();
+            SClient = dyad_newStream();
+            printw(ipstr);
+            printw(",Enter a number<=9 that you want the board be:");
+            while(1){
+                inpN=getch();
+                if(inpN>'0'&&inpN<='9'){printw("%d",inpN);
+                    N=(char)(inpN-'0');break;
+                }
+            }
+            pthread_create (&TInfo, &AThread, t_Info, NULL);
+            connecting=true;
+            dyad_addListener(SClient, DYAD_EVENT_DATA, n_Data, NULL);
+            dyad_addListener(SClient, DYAD_EVENT_ERROR, g_Error, NULL);
+            dyad_connect(SClient,ipstr, 2048);
+            return;
+        }
+        if(inpN=='s'||inpN=='S'){
+            move(row-3,0);clrtoeol();
+            mvprintw(row-3,0,"Serving mode now,listening port 2048\n");clrtoeol();move(row-2,0);
+            refresh();
+            SServ = dyad_newStream();
+            pthread_create (&TInfo, &AThread, t_Info, NULL);
+            connecting=true;
+            dyad_addListener(SServ, DYAD_EVENT_ERROR, g_Error, NULL);
+            dyad_addListener(SServ, DYAD_EVENT_ACCEPT, s_Accept, NULL);
+            dyad_listenEx(SServ, "0.0.0.0",2048,1);//Force IPv4
+            return;
+        }
+    }
     N=(char)(inpN-'0');
     printw("%d\nThe board will be %d.Press any key and rock on!",N,N);
     getch();
-	pthread_create (&TInfo, &AThread, t_Info, NULL);
+    pthread_create (&TInfo, &AThread, t_Info, NULL);
 }
 /// \brief  Make (y,x) a 'boom'
 /// \return void
 void c_boom(int y,int x){
-	if(y==NA){y=Rando(N);}
-	if(x==NA){x=Rando(N);}
-	board[curs][y%N][x%N]=20;
+    if(y==NA){y=Rando(N);}
+    if(x==NA){x=Rando(N);}
+    board[curs][y%N][x%N]=20;
 }
 /// \brief  Calculate the checksum for saving
 /// \return The checksum for current board
@@ -720,7 +725,7 @@ void c_currentStr(bool show){
 /// \brief  Quit the game
 /// \return void
 void c_forceQuit(){
-	dyad_shutdown();
+    dyad_shutdown();
     clear();
     endwin();
     exit(0);
@@ -774,18 +779,18 @@ void c_readBoard(int from){
     if(from==NA){
         from=abs((16+curs-1)%MAX_BOARD_NUM);
     }
-	from%=MAX_BOARD_NUM;
+    from%=MAX_BOARD_NUM;
     boardseed[curs]=Rando(RAND_MAX);
-	char str[1000];
+    char str[1000];
     if(boardseed[from]==NA){
-		sprintf(str,"Librazy found board#%d empty",from);
-		c_warning(str);
+        sprintf(str,"Librazy found board#%d empty",from);
+        c_warning(str);
         return;
     }
-	curs=from;
+    curs=from;
     srand(boardseed[from]);
-	sprintf(str,"Load board#%d",curs);
-	c_info(str);
+    sprintf(str,"Load board#%d",curs);
+    c_info(str);
 }
 /// \brief  Read the saved file
 /// \param  boards The number of the saved board.NA for not to use
@@ -794,32 +799,32 @@ void c_readFromDisk(int boards){
     char name[20];
     int ver=c_version();
     if(boards!=NA){
-		boards=abs(boards%MAX_BOARD_NUM);
+        boards=abs(boards%MAX_BOARD_NUM);
         sprintf(name,"2048.%d.%X.save",boards,ver);
     }else{
         sprintf(name,"2048.%X.save",ver);
         boards=curs;
     }
-	boards=abs(boards%MAX_BOARD_NUM);
+    boards=abs(boards%MAX_BOARD_NUM);
     FILE *fp;
     if((fp=fopen(name,"r"))) {
         int iptN;
         int iptVer=0;
         fscanf(fp,"%X",&iptVer);
-		char w[1024];
+        char w[1024];
         if(iptVer!=ver){
             sprintf(w,"Librazy found that the game's version dosen't match!\nYour version:%X, saved:%X",ver,iptVer);
             c_warning(w);
             return ;
         }
-		sprintf(w,"Opening %s",name);
+        sprintf(w,"Opening %s",name);
         c_info(w);
         fscanf(fp,"%d",&iptN);
         c_loadStr(iptN%MAX_BOARD_SIZE,fp);
     }else{
-		char str[1000];
-		sprintf(str,"Librazy don't know how to open %s,\n read file failed",name);
-		c_warning(str);
+        char str[1000];
+        sprintf(str,"Librazy don't know how to open %s,\n read file failed",name);
+        c_warning(str);
     }
     fclose(fp);
 }
@@ -831,17 +836,17 @@ void c_saveBoard(int to,bool jmp){
     if(to==NA){
         to=abs((curs+1)%MAX_BOARD_NUM);
     }
-	to=abs(to%MAX_BOARD_NUM);
+    to=abs(to%MAX_BOARD_NUM);
     boardseed[to]=boardseed[curs]=Rando(RAND_MAX);
     srand(boardseed[curs]);
     memcpy(board[to],board[curs],sizeof(char)*MAX_BOARD_SIZE*MAX_BOARD_SIZE);
     move(MENU_POSITION_Y,MENU_POSITION_X);
     clrtoeol();
-	char str[1000];
+    char str[1000];
     if(jmp){
-		sprintf(str,"Save board#%d, current#%d",curs,to);
+        sprintf(str,"Save board#%d, current#%d",curs,to);
         c_info(str);
-		curs=to;
+        curs=to;
     }else{
         sprintf(str,"Save board#%d to #%d",curs,to);
         c_info(str);
@@ -870,17 +875,17 @@ void c_tryQuit(){
 /// \brief  Write the board to disk
 /// \param  boards The number of board to save
 /// \return Whether the file is saved successfully
-bool c_writeBoardToDisk(char boards){
+bool c_writeBoardToDisk(char boards,bool info){
     char name[20];
     int ver=c_version();
     if(boards!=NA){
-		boards=abs(boards%MAX_BOARD_NUM);
+        boards=abs(boards%MAX_BOARD_NUM);
         sprintf(name,"2048.%d.%X.save",boards,ver);
     }else{
         sprintf(name,"2048.%X.save",ver);
         boards=curs;
     }
-	boards=abs(boards%MAX_BOARD_NUM);
+    boards=abs(boards%MAX_BOARD_NUM);
     FILE *fp;
     if((fp=fopen(name,"w+"))) {
         fprintf(fp,"%X\n",ver);
@@ -899,9 +904,9 @@ bool c_writeBoardToDisk(char boards){
         int checksum=c_checksum();
         fprintf(fp,"%d\n",checksum+boardseed[curs]);
         curs=tmp;
-		char str[1000];
+        char str[1000];
         sprintf(str,"Saved board#%d at %s",boards,name);
-        c_info(str);
+        if(info)c_info(str);
         fclose(fp);
         return true;
     }else{
@@ -911,143 +916,336 @@ bool c_writeBoardToDisk(char boards){
         fclose(fp);
         return false;
     }
-    
-    
 }
 /// \brief  To print a warning to screen
 /// 
-/// 		 The function storage the message in a buffer and call up the TInfo thread to print it
+///          The function storage the message in a buffer and call up the TInfo thread to print it
 /// \param  msg The string to print
 /// \return void
 void c_warning(const char* msg){
-	pthread_mutex_lock(&MInfo);
-	memset(sinfo,0,sizeof(sinfo));
-	strcpy(sinfo,msg);
-	iswarn=true;
-	pthread_mutex_unlock(&MInfo);
-	pthread_cond_signal (&CInfo);
+    pthread_mutex_lock(&MInfo);
+    memset(sinfo,0,sizeof(sinfo));
+    strcpy(sinfo,msg);
+    iswarn=true;
+    pthread_mutex_unlock(&MInfo);
+    pthread_cond_signal (&CInfo);
 }
 /// \brief  To print a info to screen
 /// 
-/// 		 The function storage the message in a buffer and call up the TInfo thread to print it
+///          The function storage the message in a buffer and call up the TInfo thread to print it
 /// \param  msg The string to print
 /// \return void
 void c_info(char* msg){
-	pthread_mutex_lock(&MInfo);
-	memset(sinfo,0,sizeof(sinfo));
-	strcpy(sinfo,msg);
-	iswarn=false;
-	pthread_mutex_unlock(&MInfo);
-	pthread_cond_signal (&CInfo);
+    pthread_mutex_lock(&MInfo);
+    memset(sinfo,0,sizeof(sinfo));
+    strcpy(sinfo,msg);
+    iswarn=false;
+    pthread_mutex_unlock(&MInfo);
+    pthread_cond_signal (&CInfo);
 }
 /// \brief  The thread to print infos to screen
 /// \param  arg Void
 /// \return void* NULL
 void* t_Info(void* arg){
-	if(MenuWin!=NULL)delwin(MenuWin);
-	MenuWin = newwin(2, col,row-2, 0);
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS , NULL);
-	int oldtype;
-	while(1){;
-		pthread_mutex_lock(&MInfo);
-		pthread_cond_wait (&CInfo, &MInfo);
-		pthread_testcancel();
-		pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
-		pthread_mutex_lock(&MScr);
-		wclear(MenuWin);
-		showInfo(MenuWin);
-		pthread_mutex_unlock(&MScr);
-		pthread_mutex_unlock(&MInfo);
-		pthread_setcanceltype(oldtype, NULL);
-	}
-	return NULL;
+    if(MenuWin!=NULL)delwin(MenuWin);
+    MenuWin = newwin(2, col,row-2, 0);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS , NULL);
+    int oldtype;
+    while(1){;
+        pthread_mutex_lock(&MInfo);
+        pthread_cond_wait (&CInfo, &MInfo);
+        pthread_testcancel();
+        pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
+        pthread_mutex_lock(&MScr);
+        wclear(MenuWin);
+        showInfo(MenuWin);
+        pthread_mutex_unlock(&MScr);
+        pthread_mutex_unlock(&MInfo);
+        pthread_setcanceltype(oldtype, NULL);
+    }
+    return NULL;
 }
 /// \brief  The thread to print Board to screen
 /// \param  arg Void
 /// \return void* NULL
 void* t_Show(void* arg){
-	if(BoardWin!=NULL)delwin(BoardWin);
-	BoardWin = newwin(row-6, col, 1, 0);
-	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS , NULL);
-	int oldtype;
-	while(1){
-		pthread_testcancel();
-		pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
-		pthread_mutex_lock(&MBoard);
-		pthread_testcancel();
-		pthread_mutex_lock(&MScr);
-		wclear(BoardWin);
-		showBoard(BoardWin,0,5);
-		pthread_mutex_unlock(&MScr);
-		pthread_cond_wait (&CBoard, &MBoard);
-		pthread_mutex_unlock(&MBoard);
-		pthread_setcanceltype(oldtype, NULL);
-	}
-	return NULL;
+    if(BoardWin!=NULL)delwin(BoardWin);
+    BoardWin = newwin(row-6, col, 1, 0);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS , NULL);
+    int oldtype;
+    while(1){
+        pthread_testcancel();
+        pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
+        pthread_mutex_lock(&MBoard);
+        pthread_testcancel();
+        pthread_mutex_lock(&MScr);
+        wclear(BoardWin);
+        showBoard(BoardWin,0,5);
+        pthread_mutex_unlock(&MScr);
+        pthread_cond_wait (&CBoard, &MBoard);
+        pthread_mutex_unlock(&MBoard);
+        pthread_setcanceltype(oldtype, NULL);
+    }
+    return NULL;
+}
+/// \brief  The thread to print Board to screen
+/// \param  arg Void
+/// \return void* NULL
+void* t_NetworkShow(void* arg){
+    if(BoardWin!=NULL)delwin(BoardWin);
+    BoardWin = newwin(row-6, col, 1, 0);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS , NULL);
+    int oldtype;
+    while(1){
+        pthread_testcancel();
+        pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
+        pthread_mutex_lock(&MBoard);
+        pthread_testcancel();
+        pthread_mutex_lock(&MScr);
+        wclear(BoardWin);
+        curs=0;
+        showBoard(BoardWin,0,5);
+        curs=1;
+        showBoard(BoardWin,0,col/2);
+        pthread_mutex_unlock(&MScr);
+        pthread_cond_wait (&CBoard, &MBoard);
+        pthread_mutex_unlock(&MBoard);
+        pthread_setcanceltype(oldtype, NULL);
+    }
+    return NULL;
+}
+/// \brief  The thread to print Board to screen
+/// \param  arg Void
+/// \return void* NULL
+void* t_NetworkSend(void* arg){
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS , NULL);
+    int oldtype;
+    while(1){
+        pthread_testcancel();
+        pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
+        pthread_mutex_lock(&MNet);
+        pthread_testcancel();
+        pthread_mutex_lock(&MBoard);
+        c_writeBoardToDisk(0);
+        
+        FILE *fp;
+        char name[20];
+        int ver=c_version();
+        sprintf(name,"2048.%d.%X.save",0,ver);
+        if((fp=fopen(name,"r"))) {
+            int c;
+            int count = 32000;
+            while (count--) {
+                if ((c = fgetc(fp)) != EOF) {
+                    dyad_write(SGaming, &c, 1);
+                } else {
+                    dyad_update();
+                    break;
+                }
+            }
+        }else{
+            dyad_writef(SGaming, "ERR");
+        }
+        
+        pthread_mutex_unlock(&MBoard);
+        pthread_cond_wait (&CNet, &MNet);
+        pthread_mutex_unlock(&MNet);
+        pthread_setcanceltype(oldtype, NULL);
+    }
+    return NULL;
+}
+/// \brief  The thread to print Board to screen
+/// \param  arg Void
+/// \return void* NULL
+void* t_NetworkPlay(void* arg){
+    pthread_mutex_lock(&MBoard);
+    curs=0;
+    if(boardseed[curs]==NA){
+        boardseed[curs]=Rando(RAND_MAX);
+    }
+    srand(boardseed[curs]);
+    Clrboard(curs);
+    clear();
+    pthread_create (&TNetworkShow, &AThread, t_NetworkShow , NULL);
+    keypad(stdscr, TRUE);
+    int ch=0;
+    int res=NA,lastres=NA;GetRandNums();
+    pthread_mutex_unlock(&MBoard);
+    pthread_cond_signal(&CBoard);
+    while((ch = getch()) != KEY_F(1)){
+        move(0,0);
+        clrtoeol();
+        pthread_mutex_lock(&MInfo);
+        pthread_mutex_lock(&MScr);
+        wclear(MenuWin);
+        pthread_mutex_unlock(&MScr);
+        memset(sinfo,0,sizeof(sinfo));
+        pthread_mutex_unlock(&MInfo);
+        pthread_cond_signal(&CInfo);
+        lastres=res;
+        pthread_mutex_lock(&MBoard);
+        curs=0;
+        switch(ch)
+        {
+            case KEY_LEFT:case 'H':case 'h':
+                res=Eat(ELEFT);GetRandNums();
+                break;
+            case KEY_RIGHT:case 'L':case 'l':
+                res=Eat(ERIGHT);GetRandNums();
+                break;
+            case KEY_UP:case 'K':case 'k':
+                res=Eat(EUP);GetRandNums();
+                break;
+            case KEY_DOWN:case 'J':case 'j':
+                res=Eat(EDOWN);GetRandNums();
+                break;
+            case ':':
+                pthread_mutex_unlock(&MBoard);
+                command();
+                pthread_mutex_lock(&MBoard);
+                break;
+            case 3:
+                pthread_mutex_unlock(&MBoard);
+                c_tryQuit();
+                pthread_mutex_lock(&MBoard);
+                break;
+        }
+        pthread_mutex_unlock(&MBoard);
+        pthread_cond_signal (&CBoard);
+        pthread_cond_signal (&CNet);
+        if(res==lastres&&res==0){
+            die();
+            pthread_cancel(TShow);
+            pthread_cancel(TInfo);
+            pthread_cond_signal (&CInfo);
+            pthread_join(TShow, NULL);
+            pthread_join(TInfo, NULL);
+            wclear(BoardWin);
+            wclear(MenuWin);
+            delwin(BoardWin);
+            delwin(MenuWin);
+            BoardWin=NULL;
+            MenuWin=NULL;
+            return NULL;
+        }
+    }
+    return NULL;
 }
 
 static void s_Accept(dyad_Event *e) {
-	connecting=false;
-	dyad_writef(e->remote,"ACC\n");
-	c_warning("C0");
-	dyad_removeListener(SServ, DYAD_EVENT_ACCEPT, s_Accept, NULL);
-	dyad_addListener(e->remote, DYAD_EVENT_DATA, s_Init, NULL);
+    connecting=false;
+    dyad_writef(e->remote,"ACC\n");
+    c_warning("C0");
+    dyad_removeAllListeners(SServ, DYAD_EVENT_ACCEPT);
+    dyad_addListener(e->remote, DYAD_EVENT_DATA, s_Init, NULL);
 }
 static void s_Init(dyad_Event *e) {
-	int cliver=0,val=0,cliN;
-	val=sscanf(e->data,"VERSION %X %d",&cliver,&cliN);
-	if(cliver!=c_version()||val!=2){
-		dyad_writef(e->stream,"INCOMP\n");
-		c_warning("Incompatiable version!Quit.");
-		dyad_update();
-		dyad_end(SServ);
-		getch();
-		c_forceQuit();
-	}else{
-		SGaming=SServ;
-		N=cliN;
-		isnetworking=true;
-		dyad_writef(e->stream,"si\n");
-		dyad_removeListener(e->stream, DYAD_EVENT_DATA, s_Init, NULL);
-		dyad_addListener(e->stream, DYAD_EVENT_DATA, g_Data, NULL);
-	}
+    int cliver=0,val=0,cliN;
+    val=sscanf(e->data,"VERSION %X %d",&cliver,&cliN);
+    if(cliver!=c_version()||val!=2){
+        dyad_writef(e->stream,"INCOMP\n");
+        c_warning("Incompatiable version!Quit.");
+        dyad_update();
+        dyad_end(SServ);
+        getch();
+        c_forceQuit();
+    }else{
+        SGaming=e->stream;
+        N=cliN;
+        isnetworking=true;
+        dyad_writef(e->stream,"OK\n");dyad_update();
+        dyad_removeAllListeners(e->stream, DYAD_EVENT_DATA);
+        dyad_addListener(e->stream, DYAD_EVENT_DATA, g_Data, NULL);
+    }
 }
 static void n_Data(dyad_Event *e) {
-	connecting=false;
-	c_warning("nD0");
-	int ver=c_version();
-	dyad_writef(e->stream, "VERSION %X %d\n",ver,N);dyad_update();
-	c_warning("nD1");
-	dyad_removeListener(e->stream, DYAD_EVENT_CONNECT, n_Data, NULL);
-	c_warning("nD2");
-	dyad_addListener(e->stream, DYAD_EVENT_DATA, n_Init, NULL);
-	c_warning("nD3");
+    connecting=false;
+    c_warning("nD0");
+    int ver=c_version();
+    dyad_writef(e->stream, "VERSION %X %d\n",ver,N);dyad_update();
+    c_warning("nD1");
+    dyad_removeAllListeners(e->stream, DYAD_EVENT_CONNECT);
+    c_warning("nD2");
+    dyad_addListener(e->stream, DYAD_EVENT_DATA, n_Init, NULL);
+    c_warning("nD3");
 }
 static void n_Init(dyad_Event *e) {
-	if (!memcmp(e->data, "INCOMP", 6)) {
-		c_warning("nI0");
-		c_warning("Incompatiable version!Press any key to quit.");
-		dyad_end(e->stream);
-		getch();
-		c_forceQuit();
-	}else{
-		c_warning("nI1");
-		SGaming=SClient;
-		isnetworking=true;
-		c_warning("nI2");
-		dyad_removeAllListeners(e->stream, DYAD_EVENT_DATA);
-		dyad_addListener(e->stream, DYAD_EVENT_DATA, g_Data, NULL);
-	}
+    if (!memcmp(e->data, "INCOMP", 6)) {
+        c_warning("nI0");
+        c_warning("Incompatiable version!Quit.");
+        dyad_end(e->stream);
+        getch();
+        c_forceQuit();
+    }else{
+        c_warning("nI1");
+        SGaming=e->stream;
+        isnetworking=true;
+        c_warning("nI2");
+        dyad_removeAllListeners(e->stream, DYAD_EVENT_DATA);
+        dyad_addListener(e->stream, DYAD_EVENT_DATA, g_Data, NULL);
+    }
+    
+    
+    c_writeBoardToDisk(0);
+    c_warning("Ci34");
+    FILE *fp;
+    char name[20];
+    int ver=c_version();
+    sprintf(name,"2048.%d.%X.save",0,ver);
+    if((fp=fopen(name,"r"))) {
+        c_warning("Ci35");
+        int c;
+        int count = 400;
+        while (count--) {
+            if ((c = fgetc(fp)) != EOF) {
+                dyad_write(SGaming, &c, 1);
+            } else {
+                dyad_update();
+                break;
+            }
+        }
+        c_warning("Ci4");
+    }else{
+        dyad_writef(SGaming, "ERR");
+    }
+    fclose(fp);
 }
 static void g_Data(dyad_Event *e) {
-	c_warning("C3");
-	dyad_writef(e->stream,"gd\n");
+    c_warning("C3");
+    c_writeBoardToDisk(0,false);
+    c_warning("C34");
+    FILE *fp;
+    char name[20];
+    int ver=c_version();
+    sprintf(name,"2048.%d.%X.save",0,ver);
+    if((fp=fopen(name,"r"))) {
+        c_warning("C35");
+        int c;
+        int count = 400;
+        while (count--) {
+            if ((c = fgetc(fp)) != EOF) {
+                dyad_write(SGaming, &c, 1);
+            } else {
+                dyad_update();
+                break;
+            }
+        }
+        c_warning("C4");
+    }else{
+        dyad_writef(SGaming, "ERR");
+    }
+    fclose(fp);
+    sprintf(name,"2048.n.%X.save",ver);
+    if((fp=fopen(name,"w+"))) {
+        fprintf(fp,e->data);
+    }
+    fclose(fp);
 }
 static void g_Error(dyad_Event *e) {
-	connecting=false;
-	c_warning(e->msg);
-	dyad_end(e->remote);
-	c_forceQuit();
+    connecting=false;
+    c_warning(e->msg);
+    dyad_end(e->remote);
+    c_forceQuit();
 }
 /// \brief  Main executable
 /// \return 0
@@ -1061,38 +1259,38 @@ int main()
     raw();
     if(has_colors())start_color();
     settings();
-	dyad_init();
-	pthread_attr_init (&AThread);
-	pthread_attr_setdetachstate (&AThread, PTHREAD_CREATE_JOINABLE);
-	bool cho=true;
-	while(cho){
-		pthread_mutex_init (&MBoard, NULL);
-		pthread_cond_init (&CBoard, NULL);
-		pthread_mutex_init (&MInfo, NULL);
-		pthread_cond_init (&CInfo, NULL);
-		pthread_mutex_init (&MScr, NULL);
-		pthread_mutex_init (&MNet, NULL);
-		pthread_mutex_init (&MNetC, NULL);
-		pthread_cond_init (&CNetC, NULL);
-		Clrboard(curs);
-		welcome();
-		if(connecting){
-			while (dyad_getStreamCount() > 0) {
-				dyad_update();
-			}
-		}else{
-			cho=play();
-		}
-		pthread_mutex_destroy (&MScr);
-		pthread_mutex_destroy (&MInfo);
-		pthread_cond_destroy (&CInfo);
-		pthread_mutex_destroy (&MBoard);
-		pthread_cond_destroy (&CBoard);
-		pthread_mutex_destroy (&MNet);
-		pthread_mutex_destroy (&MNetC);
-		pthread_cond_destroy (&CNetC);
-		if(isnetworking){c_forceQuit();}
-	}
-	c_forceQuit();
+    dyad_init();
+    pthread_attr_init (&AThread);
+    pthread_attr_setdetachstate (&AThread, PTHREAD_CREATE_JOINABLE);
+    bool cho=true;
+    while(cho){
+        pthread_mutex_init (&MBoard, NULL);
+        pthread_cond_init (&CBoard, NULL);
+        pthread_mutex_init (&MInfo, NULL);
+        pthread_cond_init (&CInfo, NULL);
+        pthread_mutex_init (&MScr, NULL);
+        pthread_mutex_init (&MNet, NULL);
+        pthread_mutex_init (&MNetC, NULL);
+        pthread_cond_init (&CNet, NULL);
+        Clrboard(curs);
+        welcome();
+        if(connecting){
+            while (dyad_getStreamCount() > 0) {
+                dyad_update();
+            }
+        }else{
+            cho=play();
+        }
+        pthread_mutex_destroy (&MScr);
+        pthread_mutex_destroy (&MInfo);
+        pthread_cond_destroy (&CInfo);
+        pthread_mutex_destroy (&MBoard);
+        pthread_cond_destroy (&CBoard);
+        pthread_mutex_destroy (&MNet);
+        pthread_mutex_destroy (&MNetC);
+        pthread_cond_destroy (&CNet);
+        if(isnetworking){c_forceQuit();}
+    }
+    c_forceQuit();
     return 0;
 }
