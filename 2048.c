@@ -119,6 +119,8 @@ dyad_Stream *SGaming;
 Thrd TNetworkPlay;
 /*! The handle of t_NetworkShow thread */
 Thrd TNetworkShow;
+/*! The handle of t_NetworkSend thread */
+Thrd TNetworkSend;
 /*! The handle of t_Show thread */
 Thrd TShow;
 /*! The handle of t_Info thread */
@@ -421,15 +423,15 @@ void c_boom(int y,int x);
 int  c_checksum();
 void c_currentStr(bool show);
 void c_forceQuit();
-void c_loadStr();
+void c_loadStr(int iptN,FILE* fp,bool info);
 void c_readBoard(int from);
-void c_readFromDisk(int boards);
+void c_readFromDisk(int boards,bool info);
 void c_saveBoard(int to,bool jmp);
 void c_tryQuit();
 int  c_version();
 void c_warning(const char* msg);
 void c_info(char* msg);
-bool c_writeBoardToDisk(char board);
+bool c_writeBoardToDisk(char board,bool info);
 
 /// \brief  Show and handle commands inputed by :
 /// \return void
@@ -455,7 +457,7 @@ void command(){
     }else if(strcmp(cmd,"q")==0||strcmp(cmd,"quit")==0){
         c_tryQuit();
     }else if(strcmp(cmd,"w")==0||strcmp(cmd,"write")==0){
-        c_writeBoardToDisk(NA);
+        c_writeBoardToDisk(NA,true);
     }else if(strcmp(cmd,"wb")==0||strcmp(cmd,"writeboard")==0){
         if(NA==arg){
             c_warning("Librazy don't know which board should be saved");
@@ -463,11 +465,11 @@ void command(){
             c_writeBoardToDisk(arg,true);
         }
     }else if(strcmp(cmd,"wq")==0||strcmp(cmd,"writequit")==0){
-        if(c_writeBoardToDisk(NA))c_forceQuit();
+        if(c_writeBoardToDisk(NA,true))c_forceQuit();
     }else if(strcmp(cmd,"q!")==0||strcmp(cmd,"quit!")==0){
         c_forceQuit();
     }else if(strcmp(cmd,"o")==0||strcmp(cmd,"open")==0){
-        c_readFromDisk(arg);
+        c_readFromDisk(arg,true);
     }else if(strcmp(cmd,"boom")==0){
         c_boom(arg,arg2);
     }else{
@@ -635,6 +637,7 @@ void welcome(){
                 }
             }
             pthread_create (&TInfo, &AThread, t_Info, NULL);
+			pthread_mutex_lock(&MNetC);
             connecting=true;
             dyad_addListener(SClient, DYAD_EVENT_DATA, n_Data, NULL);
             dyad_addListener(SClient, DYAD_EVENT_ERROR, g_Error, NULL);
@@ -647,6 +650,7 @@ void welcome(){
             refresh();
             SServ = dyad_newStream();
             pthread_create (&TInfo, &AThread, t_Info, NULL);
+			pthread_mutex_lock(&MNetC);
             connecting=true;
             dyad_addListener(SServ, DYAD_EVENT_ERROR, g_Error, NULL);
             dyad_addListener(SServ, DYAD_EVENT_ACCEPT, s_Accept, NULL);
@@ -734,7 +738,7 @@ void c_forceQuit(){
 /// \param  iptN The N in the saved game
 /// \param  fp The file stream to read from
 /// \return void
-void c_loadStr(int iptN,FILE* fp){
+void c_loadStr(int iptN,FILE* fp,bool info){
     N=iptN;
     Clrboard(curs);
     char str[256*3+2];
@@ -766,7 +770,7 @@ void c_loadStr(int iptN,FILE* fp){
         }
     }
     if(c_checksum()==checksum){
-        c_info("Game progress loaded successful!");
+        if(info)c_info("Game progress loaded successful!");
     }else{
         Clrboard(curs);
         c_warning("Librazy found you are cheating!");
@@ -795,7 +799,7 @@ void c_readBoard(int from){
 /// \brief  Read the saved file
 /// \param  boards The number of the saved board.NA for not to use
 /// \return void
-void c_readFromDisk(int boards){
+void c_readFromDisk(int boards,bool info){
     char name[20];
     int ver=c_version();
     if(boards!=NA){
@@ -818,9 +822,9 @@ void c_readFromDisk(int boards){
             return ;
         }
         sprintf(w,"Opening %s",name);
-        c_info(w);
+        if(info)c_info(w);
         fscanf(fp,"%d",&iptN);
-        c_loadStr(iptN%MAX_BOARD_SIZE,fp);
+        c_loadStr(iptN%MAX_BOARD_SIZE,fp,info);
     }else{
         char str[1000];
         sprintf(str,"Librazy don't know how to open %s,\n read file failed",name);
@@ -1024,17 +1028,18 @@ void* t_NetworkSend(void* arg){
         pthread_testcancel();
         pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
         pthread_mutex_lock(&MNet);
+		pthread_cond_wait (&CNet, &MNet);
         pthread_testcancel();
         pthread_mutex_lock(&MBoard);
-        c_writeBoardToDisk(0);
-        
+		
+        c_writeBoardToDisk(0,false);
         FILE *fp;
         char name[20];
         int ver=c_version();
-        sprintf(name,"2048.%d.%X.save",0,ver);
+        sprintf(name,"2048.0.%X.save",ver);
         if((fp=fopen(name,"r"))) {
             int c;
-            int count = 32000;
+            int count = 500;
             while (count--) {
                 if ((c = fgetc(fp)) != EOF) {
                     dyad_write(SGaming, &c, 1);
@@ -1043,12 +1048,12 @@ void* t_NetworkSend(void* arg){
                     break;
                 }
             }
+			c_warning("Send");
         }else{
             dyad_writef(SGaming, "ERR");
         }
         
         pthread_mutex_unlock(&MBoard);
-        pthread_cond_wait (&CNet, &MNet);
         pthread_mutex_unlock(&MNet);
         pthread_setcanceltype(oldtype, NULL);
     }
@@ -1058,6 +1063,7 @@ void* t_NetworkSend(void* arg){
 /// \param  arg Void
 /// \return void* NULL
 void* t_NetworkPlay(void* arg){
+    pthread_mutex_lock(&MNetC);
     pthread_mutex_lock(&MBoard);
     curs=0;
     if(boardseed[curs]==NA){
@@ -1067,6 +1073,7 @@ void* t_NetworkPlay(void* arg){
     Clrboard(curs);
     clear();
     pthread_create (&TNetworkShow, &AThread, t_NetworkShow , NULL);
+    pthread_create (&TNetworkSend, &AThread, t_NetworkSend , NULL);
     keypad(stdscr, TRUE);
     int ch=0;
     int res=NA,lastres=NA;GetRandNums();
@@ -1099,11 +1106,6 @@ void* t_NetworkPlay(void* arg){
             case KEY_DOWN:case 'J':case 'j':
                 res=Eat(EDOWN);GetRandNums();
                 break;
-            case ':':
-                pthread_mutex_unlock(&MBoard);
-                command();
-                pthread_mutex_lock(&MBoard);
-                break;
             case 3:
                 pthread_mutex_unlock(&MBoard);
                 c_tryQuit();
@@ -1114,7 +1116,7 @@ void* t_NetworkPlay(void* arg){
         pthread_cond_signal (&CBoard);
         pthread_cond_signal (&CNet);
         if(res==lastres&&res==0){
-            die();
+			c_warning("You are dead!");
             pthread_cancel(TShow);
             pthread_cancel(TInfo);
             pthread_cond_signal (&CInfo);
@@ -1129,6 +1131,7 @@ void* t_NetworkPlay(void* arg){
             return NULL;
         }
     }
+	pthread_mutex_unlock(&MNetC);
     return NULL;
 }
 
@@ -1156,6 +1159,7 @@ static void s_Init(dyad_Event *e) {
         dyad_writef(e->stream,"OK\n");dyad_update();
         dyad_removeAllListeners(e->stream, DYAD_EVENT_DATA);
         dyad_addListener(e->stream, DYAD_EVENT_DATA, g_Data, NULL);
+		pthread_mutex_unlock(&MNetC);
     }
 }
 static void n_Data(dyad_Event *e) {
@@ -1183,63 +1187,27 @@ static void n_Init(dyad_Event *e) {
         c_warning("nI2");
         dyad_removeAllListeners(e->stream, DYAD_EVENT_DATA);
         dyad_addListener(e->stream, DYAD_EVENT_DATA, g_Data, NULL);
+		pthread_mutex_unlock(&MNetC);
     }
-    
-    
-    c_writeBoardToDisk(0);
-    c_warning("Ci34");
-    FILE *fp;
-    char name[20];
-    int ver=c_version();
-    sprintf(name,"2048.%d.%X.save",0,ver);
-    if((fp=fopen(name,"r"))) {
-        c_warning("Ci35");
-        int c;
-        int count = 400;
-        while (count--) {
-            if ((c = fgetc(fp)) != EOF) {
-                dyad_write(SGaming, &c, 1);
-            } else {
-                dyad_update();
-                break;
-            }
-        }
-        c_warning("Ci4");
-    }else{
-        dyad_writef(SGaming, "ERR");
-    }
-    fclose(fp);
 }
 static void g_Data(dyad_Event *e) {
     c_warning("C3");
-    c_writeBoardToDisk(0,false);
-    c_warning("C34");
     FILE *fp;
-    char name[20];
+	char name[20],v[10];
     int ver=c_version();
-    sprintf(name,"2048.%d.%X.save",0,ver);
-    if((fp=fopen(name,"r"))) {
-        c_warning("C35");
-        int c;
-        int count = 400;
-        while (count--) {
-            if ((c = fgetc(fp)) != EOF) {
-                dyad_write(SGaming, &c, 1);
-            } else {
-                dyad_update();
-                break;
-            }
-        }
-        c_warning("C4");
-    }else{
-        dyad_writef(SGaming, "ERR");
-    }
-    fclose(fp);
-    sprintf(name,"2048.n.%X.save",ver);
-    if((fp=fopen(name,"w+"))) {
-        fprintf(fp,e->data);
-    }
-    fclose(fp);
+    sprintf(name,"2048.1.%X.save",ver);
+    sprintf(v,"%X",ver);
+	if(NULL!=strstr((char*)e->data,v)){
+		if((fp=fopen(name,"w+"))) {
+			fprintf(fp,e->data);
+		}
+		fclose(fp);
+		pthread_mutex_lock(&MBoard);
+		curs=1;
+		c_readFromDisk(1,false);
+		pthread_mutex_unlock(&MBoard);
+	}
+	pthread_cond_signal(&CBoard);
 }
 static void g_Error(dyad_Event *e) {
     connecting=false;
@@ -1275,8 +1243,13 @@ int main()
         Clrboard(curs);
         welcome();
         if(connecting){
+			dyad_setUpdateTimeout(0.05);
+			pthread_create (&TNetworkPlay, &AThread, t_NetworkPlay, NULL);
             while (dyad_getStreamCount() > 0) {
+				pthread_mutex_lock(&MNet);
                 dyad_update();
+				pthread_mutex_unlock(&MNet);
+				usleep(10000);
             }
         }else{
             cho=play();
