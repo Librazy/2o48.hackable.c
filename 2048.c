@@ -99,6 +99,10 @@ int point[256];
 /*! The size of the board */
 char N=5;
 
+int score[16];
+int attack[2][8];
+int attacktimes[2];
+int cost[7];
 /*! The size of the screen */
 int row,col;
 /*! The buffer of the message to print */
@@ -170,6 +174,21 @@ void settings(){
     point[10]=5120;
     point[11]=20480;
     point[12]=40960;
+    point[13]=81920;
+    point[14]=163840;
+    point[15]=327680;
+    point[16]=327680;
+    point[17]=327680;
+    point[18]=327680;
+    point[19]=327680;
+    point[20]=0;
+	cost[0]=0;
+	cost[1]=2560;
+	cost[2]=640;
+	cost[3]=640;
+	cost[4]=640;
+	cost[5]=640;
+	cost[6]=5120;
     strcpy(display[0]," ");
     strcpy(display[1],"2");
     strcpy(display[2],"4");
@@ -191,7 +210,7 @@ void settings(){
     strcpy(display[18],"whuang6");
     strcpy(display[19],"whuang7");
     strcpy(display[20],"boom");
-    for(int i=1;i<20;++i){
+    for(int i=2;i<20;++i){
         eat[i][20][1]=i-1;
         eat[20][i][1]=i-1;
         eat[i][20][0]=i-2;
@@ -311,8 +330,10 @@ char AlignLine(int curline,int direction){
 char CheckEat(char* a,char* b){
     if(*a==0||*b==0||*a==NA||*b==NA)return NA;//If empty
     if(*a==20){
-        *a=*b-1;
-        *b=*b-2;
+        int ta=*a,tb=*b;
+        *a=eat[(int)ta][(int)tb][0];
+        *b=eat[(int)ta][(int)tb][1];
+        return eat[(int)*a][(int)*b][0];
         return *a;
     }
     if(*a==*b){
@@ -402,6 +423,18 @@ int GetRandNums(){
         }
     }
     return count;
+}
+int Score(){
+	int scores=0;
+	for(int i=0;i!=N;++i){
+        for(int j=0;j!=N;++j){
+            scores+=point[(int)board[curs][i][j]];
+        }
+    }
+	for(int i=0;i!=7;++i){
+		scores-=cost[attack[curs][i]];
+	}
+	return scores;
 }
 /// \brief  Generate random num ranged fron 0 to N-1
 /// \param  N The upper bound of the random number
@@ -591,6 +624,7 @@ void showBoard(WINDOW* win,int offy,int offx){
         mvwprintw(win,offy+N*2,offx+i*10,"----------");
     }
     mvwprintw(win,offy+N*2,offx+N*10,"-");
+    mvwprintw(win,offy+N*2+1,offx,"Score:%d",score[curs]=Score());
     wrefresh(win);
 }
 /// \brief  Print the info to screen
@@ -618,12 +652,13 @@ void welcome(){
     char infostr[100]="Press N to connect to server,S to be a server";
     sprintf(verstr,"version %X",ver);
     mvprintw(row/2+1,(col-strlen(verstr))/2,verstr);
-    mvprintw(row/2+1,(col-strlen(verstr))/2,verstr);
+    mvprintw(row/2+2,(col-strlen(infostr))/2,infostr);
     mvprintw(row-3,0,"Welcome to :2048 by Librazy\n");
     printw("Enter a number<=9 that you want the board be:");
     int inpN=4+'0';
     while(1){
         inpN=getch();
+        if((inpN==3)||(inpN==KEY_F(1)))c_forceQuit();
         if(inpN>'0'&&inpN<='9')break;
         if(inpN=='n'||inpN=='N'){
             mvprintw(row-3,0,"Networking mode now,enter ip you want to connect\n");clrtoeol();move(row-2,0);echo();
@@ -640,26 +675,25 @@ void welcome(){
                 }
             }
             pthread_create (&TInfo, &AThread, t_Info, NULL);
-			pthread_mutex_lock(&MNetC);
+            pthread_mutex_lock(&MNetC);
             connecting=true;
-			isnetworking=true;
+            isnetworking=true;
             dyad_addListener(SClient, DYAD_EVENT_DATA, n_Data, NULL);
             dyad_addListener(SClient, DYAD_EVENT_ERROR, g_Error, NULL);
             dyad_connect(SClient,ipstr, 2048);
             return;
         }
         if(inpN=='s'||inpN=='S'){
-            move(row-3,0);clrtoeol();
-            mvprintw(row-3,0,"Serving mode now,listening port 2048\n");clrtoeol();move(row-2,0);
-            refresh();
+            move(row-3,0);clrtoeol();move(row-2,0);clrtoeol();
             SServ = dyad_newStream();
             pthread_create (&TInfo, &AThread, t_Info, NULL);
-			pthread_mutex_lock(&MNetC);
+            pthread_mutex_lock(&MNetC);
             connecting=true;
-			isnetworking=true;
+            isnetworking=true;
             dyad_addListener(SServ, DYAD_EVENT_ERROR, g_Error, NULL);
             dyad_addListener(SServ, DYAD_EVENT_ACCEPT, s_Accept, NULL);
             dyad_listenEx(SServ, "0.0.0.0",2048,1);//Force IPv4
+			mvprintw(row-3,0,"Serving mode now,listening port 2048\n"); refresh();
             return;
         }
     }
@@ -674,6 +708,13 @@ void c_boom(int y,int x){
     if(y==NA){y=Rando(N);}
     if(x==NA){x=Rando(N);}
     board[curs][y%N][x%N]=20;
+}
+/// \brief  Make (y,x) a 'boom'
+/// \return void
+void c_del(int y,int x){
+    if(y==NA){y=Rando(N);}
+    if(x==NA){x=Rando(N);}
+    board[curs][y%N][x%N]=0;
 }
 /// \brief  Calculate the checksum for saving
 /// \return The checksum for current board
@@ -992,7 +1033,7 @@ void* t_Show(void* arg){
         showBoard(BoardWin,0,5);
         pthread_mutex_unlock(&MScr);
         pthread_cond_wait (&CBoard, &MBoard);
-		pthread_testcancel();
+        pthread_testcancel();
         pthread_mutex_unlock(&MBoard);
         pthread_setcanceltype(oldtype, NULL);
     }
@@ -1019,7 +1060,7 @@ void* t_NetworkShow(void* arg){
         showBoard(BoardWin,0,col/2);
         pthread_mutex_unlock(&MScr);
         pthread_cond_wait (&CBoard, &MBoard);
-		pthread_testcancel();
+        pthread_testcancel();
         pthread_mutex_unlock(&MBoard);
         pthread_setcanceltype(oldtype, NULL);
     }
@@ -1035,7 +1076,7 @@ void* t_NetworkSend(void* arg){
         pthread_testcancel();
         pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &oldtype);
         pthread_mutex_lock(&MNet);
-		pthread_cond_wait (&CNet, &MNet);
+        pthread_cond_wait (&CNet, &MNet);
         pthread_testcancel();
         pthread_mutex_lock(&MBoard);
         c_writeBoardToDisk(0,false);
@@ -1063,6 +1104,85 @@ void* t_NetworkSend(void* arg){
     }
     return NULL;
 }
+void x_boom(int arg,int arg2){
+	pthread_mutex_lock(&MNet);
+	attack[0][attacktimes[0]++]=6;
+	dyad_writef(SGaming, "BOOM %d %d\n",arg,arg2);
+	dyad_update();
+	pthread_mutex_unlock(&MNet);
+}
+void x_del(int arg,int arg2){
+	pthread_mutex_lock(&MNet);
+	attack[0][attacktimes[0]++]=1;
+	dyad_writef(SGaming, "DEL %d %d\n",arg,arg2);
+	dyad_update();
+	pthread_mutex_unlock(&MNet);
+}
+void x_up(){
+	pthread_mutex_lock(&MNet);
+	attack[0][attacktimes[0]++]=2;
+	dyad_writef(SGaming, "UP\n");
+	dyad_update();
+	pthread_mutex_unlock(&MNet);
+}
+void x_down(){
+	pthread_mutex_lock(&MNet);
+	attack[0][attacktimes[0]++]=3;
+	dyad_writef(SGaming, "DOWN\n");
+	dyad_update();
+	pthread_mutex_unlock(&MNet);
+}
+void x_left(){
+	pthread_mutex_lock(&MNet);
+	attack[0][attacktimes[0]++]=4;
+	dyad_writef(SGaming, "LEFT\n");
+	dyad_update();
+	pthread_mutex_unlock(&MNet);
+}
+void x_right(){
+	pthread_mutex_lock(&MNet);
+	attack[0][attacktimes[0]++]=5;
+	dyad_writef(SGaming, "RIGHT\n");
+	dyad_update();
+	pthread_mutex_unlock(&MNet);
+}
+/// \brief  Show and handle commands inputed by :
+/// \return void
+void x_netCommand(){
+    char cmd[MAX_BOARD_SIZE*MAX_BOARD_SIZE*4];
+    echo();
+    move(0,0);
+    clrtoeol();
+    attron(A_STANDOUT);
+    mvprintw(0,MENU_POSITION_X,":");
+    attroff(A_STANDOUT);
+    int arg=NA,arg2=NA;
+    scanw("%s %d %d",cmd,&arg,&arg2);cmd[15]='\0';
+    noecho();
+	if(attacktimes[0]<7){
+		if(strcmp(cmd,"boom")==0){
+			x_boom(arg,arg2);
+		}else if(strcmp(cmd,"del")==0){
+			x_del(arg,arg2);
+		}else if(strcmp(cmd,"u")==0){
+			x_up();
+		}else if(strcmp(cmd,"d")==0){
+			x_down();
+		}else if(strcmp(cmd,"l")==0){
+			x_left();
+		}else if(strcmp(cmd,"r")==0){
+			x_right();
+		}else{
+			char str[1000];
+			sprintf(str,"Librazy don't know how to %s,\nresume game now",cmd);
+			str[99]='\0';
+			c_warning(str);
+		}
+	}else{
+		c_warning("Max attack time limit exceeded");
+	}
+	pthread_cond_signal(&CBoard);
+}
 /// \brief  The thread to print Board to screen
 /// \param  arg Void
 /// \return void* NULL
@@ -1082,14 +1202,14 @@ void* t_NetworkPlay(void* arg){
     int ch=0;
     int res=NA,lastres=NA;GetRandNums();
     pthread_mutex_unlock(&MBoard);
-	usleep(100000);
-	pthread_cond_signal(&CNet);
+    usleep(100000);
+    pthread_cond_signal(&CNet);
     pthread_cond_signal(&CBoard);
-	usleep(100000);
-	pthread_cond_signal(&CNet);
-	pthread_cond_signal (&CBoard);
-    while((ch = getch()) != KEY_F(1)&&dyad_getStreamCount()>0){
-		pthread_testcancel();
+    usleep(100000);
+    pthread_cond_signal(&CNet);
+    pthread_cond_signal (&CBoard);
+    while((ch = getch())&&dyad_getStreamCount()>0){
+        pthread_testcancel();
         move(0,0);
         clrtoeol();
         pthread_mutex_lock(&MInfo);
@@ -1116,52 +1236,62 @@ void* t_NetworkPlay(void* arg){
             case KEY_DOWN:case 'J':case 'j':
                 res=Eat(EDOWN);GetRandNums();
                 break;
-            case 3:
+            case 3:case KEY_F(1):
                 pthread_mutex_unlock(&MBoard);
                 c_tryQuit();
                 pthread_mutex_lock(&MBoard);
+                break;
+			case ':':
+				pthread_mutex_unlock(&MBoard);
+				x_netCommand();
+			    pthread_mutex_lock(&MBoard);
                 break;
         }
         pthread_mutex_unlock(&MBoard);
         pthread_cond_signal (&CBoard);
         pthread_cond_signal (&CNet);
         if(res==lastres&&res==0){
-			c_warning("You are dead!");
-			result=0;
-			break;
+			if(score[0]>score[1])
+				c_info("You Win!");
+			else if(score[0]<score[1])
+				c_info("You Lost!");
+			else
+				c_info("Neck and neck!");
+            result=0;
+            break;
         }
     }
-	getch();
-	dyad_end(SGaming);
-	dyad_end(SServ);
-	dyad_end(SClient);
-	usleep(100000);
-	pthread_cancel(TNetworkSend);
-	pthread_cancel(TNetworkShow);
-	pthread_cond_signal (&CBoard);
-	pthread_cond_signal (&CNet);
-	pthread_join(TNetworkSend, NULL);
-	pthread_join(TNetworkShow, NULL);
-	pthread_cancel(TInfo);
-	pthread_cond_signal (&CInfo);
-	pthread_join(TInfo, NULL);
-	usleep(100000);
-	wclear(BoardWin);
-	wclear(MenuWin);
-	delwin(BoardWin);
-	delwin(MenuWin);
-	BoardWin=NULL;
-	MenuWin=NULL;
-	pthread_mutex_unlock(&MNetC);
-	pthread_mutex_destroy (&MScr);
-	pthread_mutex_destroy (&MInfo);
-	pthread_cond_destroy (&CInfo);
-	pthread_mutex_destroy (&MBoard);
-	pthread_cond_destroy (&CBoard);
-	pthread_mutex_destroy (&MNet);
-	pthread_mutex_destroy (&MNetC);
-	pthread_cond_destroy (&CNet);
-	c_forceQuit();
+    getch();
+    dyad_end(SGaming);
+    dyad_end(SServ);
+    dyad_end(SClient);
+    usleep(100000);
+    pthread_cancel(TNetworkSend);
+    pthread_cancel(TNetworkShow);
+    pthread_cond_signal (&CBoard);
+    pthread_cond_signal (&CNet);
+    pthread_join(TNetworkSend, NULL);
+    pthread_join(TNetworkShow, NULL);
+    pthread_cancel(TInfo);
+    pthread_cond_signal (&CInfo);
+    pthread_join(TInfo, NULL);
+    usleep(100000);
+    wclear(BoardWin);
+    wclear(MenuWin);
+    delwin(BoardWin);
+    delwin(MenuWin);
+    BoardWin=NULL;
+    MenuWin=NULL;
+    pthread_mutex_unlock(&MNetC);
+    pthread_mutex_destroy (&MScr);
+    pthread_mutex_destroy (&MInfo);
+    pthread_cond_destroy (&CInfo);
+    pthread_mutex_destroy (&MBoard);
+    pthread_cond_destroy (&CBoard);
+    pthread_mutex_destroy (&MNet);
+    pthread_mutex_destroy (&MNetC);
+    pthread_cond_destroy (&CNet);
+    c_forceQuit();
     return NULL;
 }
 
@@ -1187,8 +1317,8 @@ static void s_Init(dyad_Event *e) {
         dyad_writef(e->stream,"OK\n");dyad_update();
         dyad_removeAllListeners(e->stream, DYAD_EVENT_DATA);
         dyad_addListener(e->stream, DYAD_EVENT_DATA, g_Data, NULL);
-		dyad_addListener(e->stream, DYAD_EVENT_CLOSE, g_Close, NULL);
-		pthread_mutex_unlock(&MNetC);
+        dyad_addListener(e->stream, DYAD_EVENT_CLOSE, g_Close, NULL);
+        pthread_mutex_unlock(&MNetC);
     }
 }
 static void n_Data(dyad_Event *e) {
@@ -1202,10 +1332,10 @@ static void n_Init(dyad_Event *e) {
     if (!memcmp(e->data, "INCOMP", 6)) {
         c_warning("Incompatiable version!Quit.");
         dyad_end(e->stream);
-		dyad_shutdown();
-		pthread_cancel(TInfo);
-		pthread_cond_signal (&CInfo);
-		pthread_join(TInfo, NULL);
+        dyad_shutdown();
+        pthread_cancel(TInfo);
+        pthread_cond_signal (&CInfo);
+        pthread_join(TInfo, NULL);
         getch();
         c_forceQuit();
     }else{
@@ -1213,39 +1343,87 @@ static void n_Init(dyad_Event *e) {
         dyad_removeAllListeners(e->stream, DYAD_EVENT_DATA);
         dyad_addListener(e->stream, DYAD_EVENT_DATA, g_Data, NULL);
         dyad_addListener(e->stream, DYAD_EVENT_CLOSE, g_Close, NULL);
-		pthread_mutex_unlock(&MNetC);
+        pthread_mutex_unlock(&MNetC);
     }
 }
 static void g_Close(dyad_Event *e) {
-	isconnected=false;
+    isconnected=false;
 }
 static void g_Data(dyad_Event *e) {
     FILE *fp;
-	char name[20],v[10];
+    char name[20],v[10];
     int ver=c_version();
     sprintf(name,"2048.1.%X.save",ver);
     sprintf(v,"%X",ver);
-	if(NULL!=strstr((char*)e->data,v)){
-		if((fp=fopen(name,"w+"))) {
-			fprintf(fp,e->data);
+    if(NULL!=strstr((char*)e->data,v)){
+        if((fp=fopen(name,"w+"))) {
+            fprintf(fp,e->data);
+        }
+        fclose(fp);
+        pthread_mutex_lock(&MBoard);
+        curs=1;
+        c_readFromDisk(1,false);
+        pthread_mutex_unlock(&MBoard);
+    }else if(memcmp(e->data, "UP", 2)==0){
+        pthread_mutex_lock(&MBoard);
+		attack[1][attacktimes[1]++]=2;
+        curs=0;
+        Eat(EUP);GetRandNums();
+        pthread_mutex_unlock(&MBoard);
+		pthread_cond_signal(&CNet);
+	}else if(memcmp(e->data, "DOWN", 4)==0){
+        pthread_mutex_lock(&MBoard);
+		attack[1][attacktimes[1]++]=3;
+        curs=0;
+        Eat(EDOWN);GetRandNums();
+        pthread_mutex_unlock(&MBoard);
+		pthread_cond_signal(&CNet);
+	}else if(memcmp(e->data, "LEFT", 4)==0){
+        pthread_mutex_lock(&MBoard);
+		attack[1][attacktimes[1]++]=4;
+        curs=0;
+        Eat(ELEFT);GetRandNums();
+        pthread_mutex_unlock(&MBoard);
+		pthread_cond_signal(&CNet);
+	}else if(memcmp(e->data, "RIGHT", 5)==0){
+        pthread_mutex_lock(&MBoard);
+		attack[1][attacktimes[1]++]=5;
+        curs=0;
+        Eat(ERIGHT);GetRandNums();
+        pthread_mutex_unlock(&MBoard);
+		pthread_cond_signal(&CNet);
+	}else if(memcmp(e->data, "BOOM", 4)==0){
+        pthread_mutex_lock(&MBoard);
+		attack[1][attacktimes[1]++]=6;
+        curs=0;
+        int y,x;
+		if(sscanf(e->data,"BOOM %d %d",&y,&x)==2){
+			c_boom(y,x);
 		}
-		fclose(fp);
-		pthread_mutex_lock(&MBoard);
-		curs=1;
-		c_readFromDisk(1,false);
-		pthread_mutex_unlock(&MBoard);
+        pthread_mutex_unlock(&MBoard);
+		pthread_cond_signal(&CNet);
+	}else if(memcmp(e->data, "DEL", 3)==0){
+        pthread_mutex_lock(&MBoard);
+		attack[1][attacktimes[1]++]=1;
+        curs=0;
+        int y,x;
+		if(sscanf(e->data,"DEL %d %d",&y,&x)==2){
+			c_del(y,x);
+		}
+        pthread_mutex_unlock(&MBoard);
+		pthread_cond_signal(&CNet);
 	}
-	pthread_cond_signal(&CBoard);
+    pthread_cond_signal(&CBoard);
 }
 static void g_Error(dyad_Event *e) {
     connecting=false;
     c_warning(e->msg);
     dyad_end(e->stream);
-	dyad_shutdown();
-	pthread_cancel(TInfo);
-	pthread_cond_signal (&CInfo);
-	pthread_join(TInfo, NULL);
-	getch();
+    dyad_shutdown();
+    pthread_cancel(TInfo);
+    pthread_cond_signal (&CInfo);
+    pthread_join(TInfo, NULL);
+    getch();
     c_forceQuit();
 }
 /// \brief  Main executable
@@ -1276,43 +1454,48 @@ int main()
         Clrboard(curs);
         welcome();
         if(isnetworking){
-			dyad_setUpdateTimeout(0.05);
-			pthread_create (&TNetworkPlay, &AThread, t_NetworkPlay, NULL);
+            dyad_setUpdateTimeout(0.05);
+            pthread_create (&TNetworkPlay, &AThread, t_NetworkPlay, NULL);
             while (dyad_getStreamCount() > 0 && isconnected) {
-				pthread_mutex_lock(&MNet);
+                pthread_mutex_lock(&MNet);
                 dyad_update();
-				pthread_mutex_unlock(&MNet);
-				usleep(10000);
+                pthread_mutex_unlock(&MNet);
+                usleep(10000);
             }
-			if(result){
-				c_info("You Win!");
-				pthread_cancel(TNetworkPlay);
-				pthread_join(TNetworkPlay, NULL);
-				pthread_cancel(TNetworkSend);
-				pthread_cancel(TNetworkShow);
-				pthread_cond_signal (&CBoard);
-				pthread_cond_signal (&CNet);
-				pthread_join(TNetworkSend, NULL);
-				pthread_join(TNetworkShow, NULL);
-				pthread_cancel(TInfo);
-				pthread_cond_signal (&CInfo);
-				pthread_join(TInfo, NULL);
-				getch();
-			}
-			cho=0;
+            if(result){
+                if(score[0]>score[1])
+					c_info("You Win!");
+				else if(score[0]<score[1])
+					c_info("You Lost!");
+				else
+					c_info("Neck and neck!");
+                pthread_cancel(TNetworkPlay);
+                pthread_join(TNetworkPlay, NULL);
+                pthread_cancel(TNetworkSend);
+                pthread_cancel(TNetworkShow);
+                pthread_cond_signal (&CBoard);
+                pthread_cond_signal (&CNet);
+                pthread_join(TNetworkSend, NULL);
+                pthread_join(TNetworkShow, NULL);
+                pthread_cancel(TInfo);
+                pthread_cond_signal (&CInfo);
+                pthread_join(TInfo, NULL);
+                getch();
+            }
+            cho=0;
         }else{
             cho=play();
         }
         if(result){
-			pthread_mutex_destroy (&MScr);
-			pthread_mutex_destroy (&MInfo);
-			pthread_cond_destroy (&CInfo);
-			pthread_mutex_destroy (&MBoard);
-			pthread_cond_destroy (&CBoard);
-			pthread_mutex_destroy (&MNet);
-			pthread_mutex_destroy (&MNetC);
-			pthread_cond_destroy (&CNet);
-		}
+            pthread_mutex_destroy (&MScr);
+            pthread_mutex_destroy (&MInfo);
+            pthread_cond_destroy (&CInfo);
+            pthread_mutex_destroy (&MBoard);
+            pthread_cond_destroy (&CBoard);
+            pthread_mutex_destroy (&MNet);
+            pthread_mutex_destroy (&MNetC);
+            pthread_cond_destroy (&CNet);
+        }
     }
     if(result){c_forceQuit();}
     return 0;
