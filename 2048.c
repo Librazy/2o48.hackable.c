@@ -10,6 +10,7 @@
 #ifndef LOCAL_NCURSES
     #include <ncurses.h>
     #include <pthread.h>
+	#include <unistd.h>
 #else 
     #include "ncurses.h"
     #include "pthread.h"
@@ -22,7 +23,6 @@ typedef pthread_t Thrd;
 #include <stdbool.h>
 #include <stdlib.h>
 #include <time.h>
-#include <unistd.h>
 #ifndef LOCAL_NCURSES
     #include "./include/dyad.h"
 #else 
@@ -152,6 +152,21 @@ Attr AThread;
 WINDOW *BoardWin;
 /*! The window to display info */
 WINDOW *MenuWin;
+
+#ifdef LOCAL_CLANG
+void usleep(DWORD waitTime){
+	LARGE_INTEGER perfCnt, start, now;
+
+	QueryPerformanceFrequency(&perfCnt);
+	QueryPerformanceCounter(&start);
+
+	do {
+		QueryPerformanceCounter((LARGE_INTEGER*) &now);
+	} while ((now.QuadPart - start.QuadPart) / ((float)perfCnt.QuadPart) * 1000 * 1000 < waitTime);
+}
+#endif
+
+
 
 /// \brief   Set the global settings
 ///

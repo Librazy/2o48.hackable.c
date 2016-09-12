@@ -313,6 +313,7 @@ enum {
 #endif
 #endif
 
+#if !defined(LOCAL_CLANG)
 #if !defined(HAVE_STRUCT_TIMESPEC)
 #define HAVE_STRUCT_TIMESPEC
 #if !defined(_TIMESPEC_DEFINED)
@@ -323,6 +324,7 @@ struct timespec {
 };
 #endif /* _TIMESPEC_DEFINED */
 #endif /* HAVE_STRUCT_TIMESPEC */
+#endif /* LOCAL_CLANG */
 
 #if !defined(SIG_BLOCK)
 #define SIG_BLOCK 0
