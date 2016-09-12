@@ -19,7 +19,7 @@ all:allw linux
 allw: wino winx86 gdio gdix86 winclang
 
 winclang:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libpdcurses.a
-	clang -O3 -Wall -std=gnu11 -I./include/ ./lib/libpthreadX64GC2.a ./include/dyad.c 2048.c -o 2048clang.exe -L./lib/ -lpdcurses -lpthreadX64GC2 -lws2_32 -luser32 -ladvapi32 -DLOCAL_NCURSES -DLOCAL_CLANG -D_CRT_SECURE_NO_WARNINGS -D_WINSOCK_DEPRECATED_NO_WARNINGS
+	clang -O3 -Wall -std=gnu11 -I./include/ ./include/dyad.c 2048.c -o 2048clang.exe -L./lib/ -lpdcurses -lpthreadX64GC2 -lws2_32 -luser32 -ladvapi32 -DLOCAL_NCURSES -DLOCAL_CLANG -D_CRT_SECURE_NO_WARNINGS -D_WINSOCK_DEPRECATED_NO_WARNINGS
 
 win:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libpdcurses.a
 	gcc -O4 -Wall -std=gnu11 -I./include/ ./lib/libpdcurses.a ./lib/libpthreadX64GC2.a ./include/dyad.c 2048.c -o 2048 -L./lib/ -lpdcurses -lpthreadX64GC2 -lws2_32 -DLOCAL_NCURSES
