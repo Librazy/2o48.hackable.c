@@ -1,12 +1,13 @@
 help:
 	@ echo "Run one of the following command lines:"
 	@ echo "make allw     (to build the four Windows executables below)"
+	@ echo "make winclang (to build the Windows X64 executable using clang)"
 	@ echo "make win      (to build the Windows X64 executable)"
 	@ echo "make winx86   (to build the Windows X86 executable)"
 	@ echo "make gdi      (to build the Windows X64 executable using gdi)"
 	@ echo "make gdix86   (to build the Windows X86 executable using gdi)"
 	@ echo "make wino     (to build the Windows X64 executable with optimization for current CPU)"
-	@ echo "make gdio      (to build the Windows X64 executable using gdi with optimization for current CPU)"
+	@ echo "make gdio     (to build the Windows X64 executable using gdi with optimization for current CPU)"
 	@ echo "make linux    (to build the linux executables both w and w/o optimization)"
 	@ echo "make gnu      (to build the linux executable)"
 	@ echo "make gnuo     (to build the linux executable with optimization for current CPU)"
@@ -15,10 +16,10 @@ help:
 
 all:allw linux
 
-allw: wino winx86 gdio gdix86
+allw: wino winx86 gdio gdix86 winclang
 
-clang:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libpdcurses.a
-	clang -O3 -Wall -std=gnu11 -I./include/ ./lib/libpthreadX64GC2.a ./include/dyad.c 2048.c -o 2048 -L./lib/ -lpdcurses -lpthreadX64GC2 -lws2_32 -luser32 -ladvapi32 -DLOCAL_NCURSES -DLOCAL_CLANG
+winclang:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libpdcurses.a
+	clang -O3 -Wall -std=gnu11 -I./include/ ./lib/libpthreadX64GC2.a ./include/dyad.c 2048.c -o 2048clang.exe -L./lib/ -lpdcurses -lpthreadX64GC2 -lws2_32 -luser32 -ladvapi32 -DLOCAL_NCURSES -DLOCAL_CLANG -D_CRT_SECURE_NO_WARNINGS -D_WINSOCK_DEPRECATED_NO_WARNINGS
 
 win:./include/dyad.c 2048.c ./include/ncurses.h ./lib/libpdcurses.a
 	gcc -O4 -Wall -std=gnu11 -I./include/ ./lib/libpdcurses.a ./lib/libpthreadX64GC2.a ./include/dyad.c 2048.c -o 2048 -L./lib/ -lpdcurses -lpthreadX64GC2 -lws2_32 -DLOCAL_NCURSES

@@ -1372,7 +1372,7 @@ static void g_Data(dyad_Event *e) {
     sprintf(v,"%X",ver);
     if(NULL!=strstr((char*)e->data,v)){
         if((fp=fopen(name,"w+"))) {
-            fprintf(fp,e->data);
+            fprintf(fp,"%s",e->data);
         }
         fclose(fp);
         pthread_mutex_lock(&MBoard);
