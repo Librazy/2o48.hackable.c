@@ -7,7 +7,7 @@ help:
 	@ echo "make gdix86   (to build the Windows X86 executable using gdi)"
 	@ echo "make wino     (to build the Windows X64 executable with optimization for current CPU)"
 	@ echo "make gdio      (to build the Windows X64 executable using gdi with optimization for current CPU)"
-	@ echo "make linux    (to build the two linux executables below)"
+	@ echo "make linux    (to build the linux executables both w and w/o optimization)"
 	@ echo "make gnu      (to build the linux executable)"
 	@ echo "make gnuo     (to build the linux executable with optimization for current CPU)"
 	@ echo "make wclean   (to clean up the working directory for Windows)"
